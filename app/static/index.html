@@ -1,0 +1,852 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#080d16">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SaveStock">
+  <title>SaveStock | Akıllı Stok Yönetimi</title>
+  <link rel="manifest" href="/static/manifest.webmanifest">
+  <link rel="icon" type="image/svg+xml" href="/static/icons/savestock-192.svg">
+  <link rel="apple-touch-icon" href="/static/icons/savestock-192.png">
+  <script>
+    (function () {
+      var theme = localStorage.getItem("savestock-theme");
+      if (theme === "light") document.documentElement.dataset.theme = "light";
+    }());
+  </script>
+  <link rel="stylesheet" href="/static/styles.css?v=38">
+</head>
+<body>
+  <section id="auth-screen" class="auth-screen" aria-live="polite" hidden>
+    <div class="auth-shell">
+      <aside class="auth-brand-panel">
+        <div class="brand auth-brand"><div class="brand-mark">SS</div><div><strong>SaveStock</strong><span>AKILLI STOK YÖNETİMİ</span></div></div>
+        <div class="auth-brand-copy"><p class="eyebrow">GÜVENLİ STOK YÖNETİMİ</p><h1>Stoklarınız<br>kontrol altında.</h1><p>Hesabınızla giriş yapın; rolünüze uygun ekran ve işlemler açılsın.</p></div>
+        <div class="auth-feature"><span>✓</span><div><strong>Rol bazlı erişim</strong><small>Yönetici ve kullanıcı izinleri ayrı tutulur.</small></div></div>
+        <div class="auth-feature"><span>◷</span><div><strong>Lot ve SKT takibi</strong><small>Stok kayıtlarını son kullanma tarihiyle izleyin.</small></div></div>
+        <small class="auth-local-note">Yerel SaveStock sistemi</small>
+      </aside>
+      <div class="auth-content">
+        <section id="login-panel" class="auth-card" hidden>
+          <p class="eyebrow">SAVESTOCK HESABI</p><h2>Giriş yapın</h2><p class="auth-description">Yetkileriniz, e-posta adresinize kayıtlı hesaba göre otomatik belirlenir.</p>
+          <form id="login-form" class="auth-form">
+            <label>E-posta<input name="email" type="email" autocomplete="username" placeholder="ornek@firma.com" required maxlength="254"></label>
+            <label>Şifre<input name="password" type="password" autocomplete="current-password" placeholder="Şifrenizi girin" required maxlength="128"></label>
+            <button class="button button-primary full-button" type="submit">Giriş Yap <span>→</span></button>
+          </form>
+        </section>
+
+        <section id="setup-panel" class="auth-card" hidden>
+          <p class="eyebrow">İLK KURULUM</p><h2>Yönetici hesabınızı oluşturun</h2><p class="auth-description">Bu sistem için ilk yönetici hesabı oluşturulacak.</p>
+          <form id="setup-form" class="auth-form">
+            <label>Ad soyad<input name="full_name" autocomplete="name" placeholder="Adınız Soyadınız" required minlength="2" maxlength="120"></label>
+            <label>E-posta<input name="email" type="email" autocomplete="username" placeholder="ornek@firma.com" required maxlength="254"></label>
+            <label>Şifre<input name="password" type="password" autocomplete="new-password" placeholder="En az 10 karakter" required minlength="10" maxlength="128"></label>
+            <label>Şifreyi tekrar girin<input name="password_confirm" type="password" autocomplete="new-password" placeholder="Şifreyi tekrar yazın" required minlength="10" maxlength="128"></label>
+            <button class="button button-primary full-button" type="submit">Yönetici hesabı oluştur</button>
+          </form>
+        </section>
+        <p id="auth-message" class="auth-message" role="alert" hidden></p>
+        <small class="auth-copyright">© 2026 SaveStock · Yerel geliştirme sürümü</small>
+      </div>
+    </div>
+  </section>
+
+  <div class="app-shell" id="app-shell" hidden>
+    <button class="mobile-menu-backdrop" id="mobile-menu-backdrop" type="button" aria-label="Menüyü kapat" hidden></button>
+    <aside class="sidebar" id="app-sidebar">
+      <div class="brand">
+        <div class="brand-mark">SS</div>
+        <div><strong>SaveStock</strong><span>AKILLI STOK YÖNETİMİ</span></div>
+        <button class="mobile-menu-close" id="mobile-menu-close" type="button" aria-label="Menüyü kapat">×</button>
+      </div>
+      <div class="side-label">ÇALIŞMA ALANI</div>
+      <nav class="side-nav" aria-label="Ana menü">
+        <button class="nav-item active" type="button" data-page="overview"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m3.5 10 8.5-7 8.5 7"/><path d="M5.5 9v11h13V9M9.5 20v-6h5v6"/></svg></span><span>Genel Bakış</span></button>
+        <button class="nav-item" type="button" data-page="product-add"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/><circle cx="12" cy="12" r="9"/></svg></span><span>Ürün Ekle</span></button>
+        <button class="nav-item" type="button" data-page="dealers" data-admin-only hidden><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 20.5h18M5 20V5.5h14V20M8 8.5h2m4 0h2m-8 4h2m4 0h2m-8 4h2m4 0h2"/></svg></span><span>Bayiler</span></button>
+        <button class="nav-item" type="button" data-page="stock-requests"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 8h15m0 0-4-4m4 4-4 4M20 16H5m0 0 4-4m-4 4 4 4"/></svg></span><span>Stok Talepleri</span></button>
+        <button class="nav-item" type="button" data-page="products"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m12 3 8.5 4.5v9L12 21l-8.5-4.5v-9L12 3Z"/><path d="m3.8 7.7 8.2 4.5 8.2-4.5M12 12.2V21"/></svg></span><span>Ürünler</span></button>
+        <button class="nav-item" type="button" data-page="movements"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 7h15m0 0-4-4m4 4-4 4M20 17H5m0 0 4-4m-4 4 4 4"/></svg></span><span>Stok Hareketleri</span></button>
+        <button class="nav-item" type="button" data-page="expiry"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></span><span>SKT Takibi</span></button>
+        <button class="nav-item" type="button" data-page="categories"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 5.5h16l-1.5 13h-13L4 5.5Z"/><path d="M8 9h8m-8 3.5h8m-8 3.5h5"/></svg></span><span>Kategoriler</span></button>
+        <button class="nav-item" type="button" data-page="reports"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 20V11h4v9m4 0V4h4v16m4 0v-6h-4"/></svg></span><span>Raporlar</span></button>
+        <button class="nav-item" type="button" data-page="profile"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></svg></span><span>Profilim</span></button>
+        <button class="nav-item" type="button" data-page="users" data-admin-only hidden><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0m1-14a3 3 0 0 1 0 6m1 3a5.5 5.5 0 0 1 4 5"/></svg></span><span>Kullanıcılar</span></button>
+        <button class="nav-item" type="button" data-page="billing"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3 10h18m-13 5h3"/></svg></span><span>Abonelik</span></button>
+        <button class="nav-item" type="button" data-page="settings"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3.5v2m0 13v2m8.5-8.5h-2m-13 0h-2m14.01-6.01-1.42 1.42m-9.18 9.18-1.42 1.42m12.02 0-1.42-1.42m-9.18-9.18-1.42-1.42"/><circle cx="12" cy="12" r="6"/></svg></span><span>Ayarlar</span></button>
+      </nav>
+      <button class="nav-item logout-nav-item" id="logout-button" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M10 4H5.5A1.5 1.5 0 0 0 4 5.5v13A1.5 1.5 0 0 0 5.5 20H10m4-4 4-4-4-4m4 4H9"/></svg></span><span>Çıkış yap</span></button>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="page-heading">
+          <button class="mobile-menu-button" id="mobile-menu-button" type="button" aria-controls="app-sidebar" aria-expanded="false" aria-label="Menüyü aç">
+            <span></span><span></span><span></span>
+          </button>
+          <div class="page-heading-copy">
+            <div class="eyebrow" id="page-breadcrumb">ENVANTER / GENEL BAKIŞ</div>
+            <div class="page-title-row">
+              <h1 id="page-title">Genel Bakış</h1>
+              <div class="topbar-actions">
+                <button class="button button-quiet install-app-button" id="install-app-button" type="button" hidden>＋ Uygulamayı yükle</button>
+                <div class="notification-anchor" id="notification-anchor">
+                <button class="icon-button notification-button" id="notification-button" type="button" aria-label="Bildirimleri aç" aria-controls="notification-panel" aria-expanded="false">
+                  <svg class="notification-bell" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>
+                  <span class="notification-dot" aria-hidden="true" hidden></span>
+                </button>
+                <section class="notification-panel" id="notification-panel" aria-label="Bildirimler" aria-labelledby="notification-panel-title" hidden>
+                  <div class="notification-panel-header"><div><h2 id="notification-panel-title">Bildirimler</h2><p id="notification-panel-summary">Güncel stok ve SKT uyarıları</p></div><button type="button" class="notification-close" id="notification-close" aria-label="Bildirimleri kapat">×</button></div>
+                  <div class="notification-list" id="notification-list"></div>
+                </section>
+                </div>
+                <button class="top-user top-user-button" id="profile-shortcut" type="button" data-page="profile" aria-label="Profilime git" title="Profilim"><span class="user-avatar" id="top-avatar">SS</span><span><strong id="top-user-name">SaveStock</strong><small id="top-user-role">Yerel sistem</small></span></button>
+              </div>
+            </div>
+            <p id="page-subtitle">Stok ve son kullanma tarihlerini takip edin.</p>
+          </div>
+        </div>
+      </header>
+      <div class="data-load-error" id="data-load-error" role="alert" hidden>
+        <span id="data-load-error-message"></span>
+        <button class="button button-quiet" id="retry-data-load" type="button">Yeniden dene</button>
+      </div>
+
+      <section id="page-overview" class="page active">
+        <section class="welcome">
+          <div>
+            <p class="eyebrow">SAVESTOCK · YEREL STOK YÖNETİMİ</p>
+            <h2>Stoklarınız kontrol altında.</h2>
+            <p>Ürün, lot ve son kullanma tarihi durumunu tek ekrandan izleyin.</p>
+          </div>
+          <button class="button button-primary" type="button" data-page="product-add" data-focus-form="product-form">＋ Ürün ekle</button>
+        </section>
+
+        <section class="metrics metrics-four">
+          <button class="metric-card metric-card-action" id="dashboard-products-card" type="button" aria-label="Toplam ürün: Ürünler sayfasını aç">
+            <span class="metric-top"><span>TOPLAM ÜRÜN</span><span class="metric-icon blue" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z"/><path d="m4.3 7.7 7.7 4.4 7.7-4.4M12 12.1V21"/></svg></span></span>
+            <strong id="product-count">0</strong><small>Kayıtlı ürün çeşidi</small>
+          </button>
+          <button class="metric-card metric-card-action" id="dashboard-stock-card" type="button" aria-label="Toplam stok: Stok hareketleri sayfasını aç">
+            <span class="metric-top"><span>TOPLAM STOK</span><span class="metric-icon green" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M3 10 12 4l9 6v10H3V10Z"/><path d="M3 10h18M7 14h4v6H7zM14 14h3v3h-3z"/></svg></span></span>
+            <strong id="total-units">0</strong><small>Adet / birim</small>
+          </button>
+          <button class="metric-card metric-card-action" id="dashboard-near-expiry-card" type="button" aria-label="Yaklaşan SKT: Yaklaşan lotları görüntüle">
+            <span class="metric-top"><span>YAKLAŞAN SKT</span><span class="metric-icon amber" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></span></span>
+            <strong id="near-expiry">0</strong><small id="expiry-window-label">Önümüzdeki 30 gün · lot</small>
+          </button>
+          <button class="metric-card metric-card-action" id="dashboard-expired-card" type="button" aria-label="SKT'si geçmiş: Süresi geçmiş lotları görüntüle">
+            <span class="metric-top"><span>SKT'Sİ GEÇMİŞ</span><span class="metric-icon red" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M12 3 22 21H2L12 3Z"/><path d="M12 9v5m0 3h.01"/></svg></span></span>
+            <strong id="expired">0</strong><small>Kontrol edilmesi gereken lot</small>
+          </button>
+        </section>
+
+        <article class="panel low-stock-alert" id="low-stock-alert" role="status" aria-live="polite" aria-atomic="true" hidden>
+          <div class="panel-heading"><div><h3>Kritik stok uyarısı</h3><p id="low-stock-alert-copy"></p></div><span class="metric-icon red" aria-hidden="true">!</span></div>
+          <div class="low-stock-alert-list" id="low-stock-alert-list"></div>
+          <button class="text-button low-stock-alert-link" id="show-low-stock-products" type="button">Düşük stoklu ürünleri görüntüle →</button>
+        </article>
+
+        <div class="dashboard-grid">
+          <article class="panel trend-panel">
+            <div class="panel-heading"><div><h3>Aylık stok giriş / çıkış</h3><p>Son hareket kayıtlarına göre miktar</p></div><span class="chart-legend"><i class="legend-in"></i> Giriş <i class="legend-out"></i> Çıkış</span></div>
+            <div id="movement-chart" class="movement-chart"><div class="empty">Hareket verisi bekleniyor.</div></div>
+          </article>
+          <article class="panel">
+            <div class="panel-heading"><div><h3>Stok durum özeti</h3><p>Ürün çeşidine göre</p></div></div>
+            <div id="stock-status" class="status-summary"></div>
+          </article>
+          <article class="panel">
+            <div class="panel-heading"><div><h3>Yaklaşan SKT</h3><p>Öncelikle kontrol edilmesi gereken lotlar</p></div><button class="text-button" type="button" data-page="expiry">Tümünü gör →</button></div>
+            <div id="upcoming-list" class="compact-list"><div class="empty">Yükleniyor…</div></div>
+          </article>
+          <article class="panel">
+            <div class="panel-heading"><div><h3>Son stok hareketleri</h3><p>En son giriş ve çıkışlar</p></div><button class="text-button" type="button" data-page="movements">Tümünü gör →</button></div>
+            <div id="recent-list" class="compact-list"><div class="empty">Yükleniyor…</div></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="page-product-add" class="page">
+        <section class="panel product-add-intro">
+          <span class="metric-icon blue" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="m12 3 8.5 4.5v9L12 21l-8.5-4.5v-9L12 3Z"/><path d="M12 8v8m-4-4h8"/></svg></span>
+          <div><h2>Yeni ürün</h2><p>Başlamak için ürün adını ve stok kodunu girin. Diğer bilgiler isteğe bağlıdır.</p></div>
+        </section>
+        <article class="panel form-panel product-add-panel">
+          <form id="product-form">
+            <label>Ürün adı<input name="name" placeholder="Örn. Süt 1 L" required maxlength="160" autocomplete="off"><small class="field-error" data-error-for="name" hidden></small></label>
+            <label>Stok kodu<input name="sku" placeholder="Örn. URN-001" required maxlength="64" autocomplete="off"><small class="field-error" data-error-for="sku" hidden></small></label>
+            <button class="button button-quiet full-button product-camera-button" id="barcode-scan-button" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h2l1.2-1.5h4.6L15.5 5h2A2.5 2.5 0 0 1 20 7.5v10a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17.5v-10Z"/><circle cx="12" cy="12" r="3.5"/></svg>
+              Barkodu kamerayla okut
+            </button>
+            <details class="product-add-options">
+              <summary>İsteğe bağlı bilgiler</summary>
+              <div class="product-add-options-content">
+                <label>Barkod
+                  <div class="barcode-entry-row">
+                    <input name="barcode" id="product-barcode" placeholder="Barkod numarası" maxlength="80" autocomplete="off">
+                  </div>
+                  <small class="field-error" data-error-for="barcode" hidden></small>
+                  <small class="barcode-help">Kamera ile okutun veya numarayı elle yazın.</small>
+                </label>
+                <div class="form-row">
+                  <label>Kategori<select name="category_id" id="category-select"></select><small class="field-error" data-error-for="category_id" hidden></small></label>
+                  <label>Birim<input name="unit" value="adet" required maxlength="24"><small class="field-error" data-error-for="unit" hidden></small></label>
+                </div>
+              </div>
+            </details>
+            <div class="form-error" id="product-form-error" role="alert" hidden></div>
+            <button class="button button-primary full-button product-add-submit" type="submit">Ürünü kaydet</button>
+          </form>
+        </article>
+        <button class="button button-quiet product-add-back" type="button" data-page="products">Ürün kataloğuna dön</button>
+      </section>
+
+      <section id="page-products" class="page">
+        <div class="product-actions">
+          <button class="button button-quiet" type="button" id="export-products">CSV'ye aktar</button>
+          <button class="button button-primary" type="button" data-page="product-add" data-focus-form="product-form">＋ Ürün ekle</button>
+        </div>
+        <section class="metrics metrics-four">
+          <button class="metric-card metric-card-action" type="button" data-product-insight="total" aria-label="Toplam ürün: tüm ürünlerin ayrıntılarını aç" aria-controls="page-product-insight">
+            <span class="metric-top"><span>TOPLAM ÜRÜN</span><span class="metric-icon blue" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z"/><path d="m4.3 7.7 7.7 4.4 7.7-4.4M12 12.1V21"/></svg></span></span><strong id="product-total-count">0</strong><small>Tüm ürünler</small>
+          </button>
+          <button class="metric-card metric-card-action" type="button" data-product-insight="stocked" aria-label="Stokta olan: mevcut stoğu bulunan ürünlerin ayrıntılarını aç" aria-controls="page-product-insight">
+            <span class="metric-top"><span>STOKTA OLAN</span><span class="metric-icon green" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span></span><strong id="product-stocked-count">0</strong><small>Mevcut miktarı olan</small>
+          </button>
+          <button class="metric-card metric-card-action" type="button" data-product-insight="critical" aria-label="Kritik stok: eşik seviyesindeki ürünlerin ayrıntılarını aç" aria-controls="page-product-insight">
+            <span class="metric-top"><span>KRİTİK STOK</span><span class="metric-icon amber" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M12 3 22 21H2L12 3Z"/><path d="M12 9v5m0 3h.01"/></svg></span></span><strong id="product-low-count">0</strong><small>Eşik altında</small>
+          </button>
+          <button class="metric-card metric-card-action" type="button" data-product-insight="empty" aria-label="Stokta yok: mevcut stoğu olmayan ürünlerin ayrıntılarını aç" aria-controls="page-product-insight">
+            <span class="metric-top"><span>STOKTA YOK</span><span class="metric-icon red" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="m4 7 8-4 8 4v10l-8 4-8-4V7Z"/><path d="m4.5 7.3 7.5 4 7.5-4M12 11.3V21m-3-6 6 6m0-6-6 6"/></svg></span></span><strong id="product-empty-count">0</strong><small>Stok girişi bekleyen</small>
+          </button>
+        </section>
+        <article class="panel table-panel">
+            <div class="panel-heading"><div><h3>Ürün kataloğu</h3><p>Ürünleri arayın ve stok durumunu inceleyin.</p></div></div>
+            <details id="product-filter-panel" class="product-filter-panel" open>
+              <summary>Filtrele ve ara <span id="product-filter-summary" aria-live="polite">Tüm ürünler</span></summary>
+              <div class="filter-row">
+                <label class="search-field"><span>⌕</span><input id="product-search" type="search" aria-label="Ürün adı, stok kodu veya barkod ara" placeholder="Ürün adı, stok kodu veya barkod ara"></label>
+                <select id="product-category-filter" aria-label="Kategori filtresi"><option value="">Tüm kategoriler</option></select>
+                <select id="product-stock-filter" aria-label="Stok durumu filtresi"><option value="all">Tüm durumlar</option><option value="in_stock">Stokta olan</option><option value="low_stock">Kritik stok</option><option value="no_stock">Stokta olmayan</option></select>
+              </div>
+            </details>
+            <div class="product-bulk-actions" id="product-bulk-actions" role="region" aria-label="Toplu ürün işlemleri" hidden>
+              <span id="selected-product-count" aria-live="polite">0 ürün seçildi</span>
+              <button class="button button-quiet" type="button" id="export-selected-products">Seçilenleri CSV'ye aktar</button>
+              <button class="text-button" type="button" id="clear-product-selection">Seçimi temizle</button>
+            </div>
+            <div class="table-wrap product-table-wrap">
+              <table class="products-table">
+                <thead><tr>
+                  <th class="product-select-cell"><input id="select-all-products" type="checkbox" aria-label="Görüntülenen tüm ürünleri seç"></th>
+                  <th aria-sort="ascending"><button class="sort-button" type="button" data-product-sort="name">ÜRÜN <span aria-hidden="true">↑</span></button></th>
+                  <th aria-sort="none"><button class="sort-button" type="button" data-product-sort="sku">STOK KODU <span aria-hidden="true"></span></button></th>
+                  <th aria-sort="none"><button class="sort-button" type="button" data-product-sort="barcode">BARKOD <span aria-hidden="true"></span></button></th><th aria-sort="none"><button class="sort-button" type="button" data-product-sort="category_name">KATEGORİ <span aria-hidden="true"></span></button></th>
+                  <th aria-sort="none"><button class="sort-button" type="button" data-product-sort="total_quantity">MEVCUT STOK <span aria-hidden="true"></span></button></th>
+                  <th>DURUM</th><th>İŞLEM</th>
+                </tr></thead>
+                <tbody id="product-rows"><tr><td class="empty" colspan="8">Yükleniyor…</td></tr></tbody>
+              </table>
+            </div>
+            <nav class="product-pagination" id="product-pagination" aria-label="Ürün listesi sayfaları" hidden>
+              <button class="button button-quiet" type="button" id="product-page-previous" aria-label="Önceki ürün sayfası">← Önceki</button>
+              <span id="product-page-label" aria-live="polite"></span>
+              <button class="button button-quiet" type="button" id="product-page-next" aria-label="Sonraki ürün sayfası">Sonraki →</button>
+            </nav>
+        </article>
+      </section>
+
+      <section id="page-product-insight" class="page">
+        <div class="product-insight-actions">
+          <button class="button button-quiet" type="button" data-page="products">← Ürünlere dön</button>
+        </div>
+        <section class="panel product-insight-hero" aria-labelledby="product-insight-title">
+          <div class="product-insight-heading">
+            <span class="metric-icon blue product-insight-icon" id="product-insight-icon" aria-hidden="true"></span>
+            <div><p class="eyebrow">ÜRÜN DURUM RAPORU</p><h2 id="product-insight-title">Ürün durumu</h2><p id="product-insight-description"></p></div>
+          </div>
+          <div class="product-insight-count-card"><strong id="product-insight-count">0</strong><span id="product-insight-count-label">Ürün</span></div>
+        </section>
+        <article class="panel product-insight-panel">
+          <div class="panel-heading"><div><h3 id="product-insight-list-title">Ürün listesi</h3><p id="product-insight-list-summary"></p></div></div>
+          <label class="product-insight-search"><span aria-hidden="true">⌕</span><input id="product-insight-search" type="search" aria-label="Bu listedeki ürünleri ara" placeholder="Ürün, stok kodu veya kategori ara"></label>
+          <div class="product-insight-list" id="product-insight-list" role="list" aria-label="Ürün durumu listesi"></div>
+          <nav class="product-insight-pagination" id="product-insight-pagination" aria-label="Ürün durumu sayfaları" hidden>
+            <button class="button button-quiet" type="button" id="product-insight-previous" aria-label="Önceki ürünler">← Önceki</button>
+            <span id="product-insight-page-label" aria-live="polite"></span>
+            <button class="button button-quiet" type="button" id="product-insight-next" aria-label="Sonraki ürünler">Sonraki →</button>
+          </nav>
+        </article>
+      </section>
+
+      <section id="page-movements" class="page">
+        <section class="metrics metrics-three">
+          <button class="metric-card metric-card-action" type="button" data-movement-insight="inbound" aria-label="Stok girişi: giriş hareketlerinin ayrıntılarını aç" aria-controls="page-movement-insight">
+            <span class="metric-top"><span>STOK GİRİŞİ</span><span class="metric-icon green" aria-hidden="true">↓</span></span><strong id="inbound-total">0</strong><small>Yüklenen son hareketler</small>
+          </button>
+          <button class="metric-card metric-card-action" type="button" data-movement-insight="outbound" aria-label="Stok çıkışı: çıkış hareketlerinin ayrıntılarını aç" aria-controls="page-movement-insight">
+            <span class="metric-top"><span>STOK ÇIKIŞI</span><span class="metric-icon red" aria-hidden="true">↑</span></span><strong id="outbound-total">0</strong><small>Yüklenen son hareketler</small>
+          </button>
+          <button class="metric-card metric-card-action" type="button" data-movement-insight="all" aria-label="Hareket kaydı: yüklenen stok hareketlerinin ayrıntılarını aç" aria-controls="page-movement-insight">
+            <span class="metric-top"><span>HAREKET KAYDI</span><span class="metric-icon blue" aria-hidden="true">⇄</span></span><strong id="movement-total">0</strong><small id="movement-limit-label">Son 100 kayıt</small>
+          </button>
+        </section>
+        <article class="panel table-panel">
+          <div class="panel-heading"><div><h3>Stok hareketleri</h3><p>Giriş, FIFO çıkış ve yönetici sayım düzeltmeleri; işlemi yapan hesabıyla birlikte.</p></div><button class="button button-quiet" type="button" id="export-movements">CSV'ye aktar</button></div>
+          <div class="filter-row">
+            <label class="search-field"><span>⌕</span><input id="movement-search" type="search" placeholder="Ürün, lot, açıklama veya kullanıcı ara"></label>
+            <select id="movement-type-filter" aria-label="Hareket türü"><option value="all">Tüm hareket türleri</option><option value="IN">Stok girişi</option><option value="OUT">Stok çıkışı</option></select>
+            <label class="date-filter">Başlangıç<input id="movement-from" type="date"></label>
+            <label class="date-filter">Bitiş<input id="movement-to" type="date"></label>
+          </div>
+          <div class="table-wrap">
+            <table><thead><tr><th>TARİH / SAAT</th><th>BAYİ</th><th>HAREKET TÜRÜ</th><th>ÜRÜN</th><th>LOT KODU</th><th>MİKTAR</th><th>AÇIKLAMA</th><th>İŞLEMİ YAPAN</th></tr></thead>
+              <tbody id="movement-rows"><tr><td class="empty" colspan="8">Yükleniyor…</td></tr></tbody>
+            </table>
+          </div>
+        </article>
+        <details id="movement-actions" class="panel movement-actions">
+          <summary>＋ Yeni stok işlemi</summary>
+          <div class="movement-form-grid">
+            <article class="form-panel-inner"><div class="panel-heading compact"><div><h3>Stok girişi</h3><p>Ürüne lot ve SKT ekleyin.</p></div></div>
+              <form id="inbound-form">
+                <label>Ürün<select name="product_id" class="product-select" required></select></label>
+                <label>Bayi / depo<select name="dealer_id" class="dealer-select" required></select></label>
+                <div class="form-row"><label>Lot kodu<input name="batch_code" placeholder="Örn. LOT-2401" required maxlength="80"></label><label>Miktar<input name="quantity" type="number" min="1" step="1" placeholder="0" required></label></div>
+                <div class="form-row"><label>Son kullanma tarihi<input name="expiry_date" type="date" required></label><label>Açıklama<input name="note" placeholder="İsteğe bağlı" maxlength="240"></label></div>
+                <button class="button button-primary full-button" type="submit">Stok girişi yap</button>
+              </form>
+            </article>
+            <article class="form-panel-inner"><div class="panel-heading compact"><div><h3>Stok çıkışı</h3><p>Uygun lotlardan SKT önceliğine göre düşer.</p></div></div>
+              <form id="outbound-form">
+                <label>Ürün<select name="product_id" class="product-select" required></select></label>
+                <label>Bayi / depo<select name="dealer_id" class="dealer-select" required></select></label>
+                <div class="form-row"><label>Miktar<input name="quantity" type="number" min="1" step="1" placeholder="0" required></label><label>Açıklama<input name="note" placeholder="İsteğe bağlı" maxlength="240"></label></div>
+                <button class="button button-dark full-button" type="submit">FIFO ile stok düş</button>
+              </form>
+            </article>
+            <article class="form-panel-inner" data-admin-only hidden><div class="panel-heading compact"><div><h3>Stok düzeltmesi</h3><p>Lot miktarını sayım sonucuna göre güncelleyin.</p></div></div>
+              <form id="adjustment-form">
+                <label>Ürün<select name="product_id" class="product-select" required></select></label>
+                <label>Bayi / depo<select name="dealer_id" class="dealer-select" required></select></label>
+                <div class="form-row"><label>Lot kodu<input name="batch_code" placeholder="Düzeltilecek lot kodu" required maxlength="80"></label><label>Sayım miktarı<input name="target_quantity" type="number" min="0" step="1" placeholder="0" required></label></div>
+                <label>Düzeltme nedeni<input name="reason" placeholder="Örn. Fiziksel sayım farkı" required minlength="3" maxlength="180"></label>
+                <button class="button button-dark full-button" type="submit">Sayımı kaydet</button>
+              </form>
+            </article>
+          </div>
+        </details>
+      </section>
+
+      <section id="page-movement-insight" class="page">
+        <div class="product-insight-actions">
+          <button class="button button-quiet" type="button" data-page="movements">← Stok hareketlerine dön</button>
+        </div>
+        <section class="panel product-insight-hero" aria-labelledby="movement-insight-title">
+          <div class="product-insight-heading">
+            <span class="metric-icon blue product-insight-icon" id="movement-insight-icon" aria-hidden="true"></span>
+            <div><p class="eyebrow">STOK HAREKETİ RAPORU</p><h2 id="movement-insight-title">Hareket kayıtları</h2><p id="movement-insight-description"></p></div>
+          </div>
+          <div class="product-insight-count-card"><strong id="movement-insight-quantity">0</strong><span id="movement-insight-quantity-label">Toplam miktar</span></div>
+        </section>
+        <article class="panel product-insight-panel">
+          <div class="panel-heading"><div><h3 id="movement-insight-list-title">Hareket listesi</h3><p id="movement-insight-list-summary"></p></div></div>
+          <label class="product-insight-search"><span aria-hidden="true">⌕</span><input id="movement-insight-search" type="search" aria-label="Bu hareket listesini ara" placeholder="Ürün, lot, açıklama veya kullanıcı ara"></label>
+          <div class="product-insight-list" id="movement-insight-list" role="list" aria-label="Stok hareketleri"></div>
+          <nav class="product-insight-pagination" id="movement-insight-pagination" aria-label="Stok hareketi sayfaları" hidden>
+            <button class="button button-quiet" type="button" id="movement-insight-previous" aria-label="Önceki hareketler">← Önceki</button>
+            <span id="movement-insight-page-label" aria-live="polite"></span>
+            <button class="button button-quiet" type="button" id="movement-insight-next" aria-label="Sonraki hareketler">Sonraki →</button>
+          </nav>
+        </article>
+      </section>
+
+      <section id="page-expiry" class="page">
+        <section class="metrics metrics-four">
+          <button class="metric-card metric-card-action" type="button" data-expiry-insight="expired" aria-label="SKT'si geçmiş lotların ayrıntılarını aç" aria-controls="page-expiry-insight">
+            <span class="metric-top"><span>SKT'Sİ GEÇMİŞ</span><span class="metric-icon red" aria-hidden="true">!</span></span><strong id="expiry-expired-count">0</strong><small>Lot</small>
+          </button>
+          <button class="metric-card metric-card-action" type="button" data-expiry-insight="near" aria-label="Uyarı dönemindeki lotların ayrıntılarını aç" aria-controls="page-expiry-insight">
+            <span class="metric-top"><span>UYARI DÖNEMİNDE</span><span class="metric-icon amber" aria-hidden="true">◷</span></span><strong id="expiry-near-count">0</strong><small id="expiry-setting-caption">İlk 30 gün</small>
+          </button>
+          <button class="metric-card metric-card-action" type="button" data-expiry-insight="mid" aria-label="30 ile 90 gün içinde son kullanma tarihi dolacak lotların ayrıntılarını aç" aria-controls="page-expiry-insight">
+            <span class="metric-top"><span>30 - 90 GÜN</span><span class="metric-icon blue" aria-hidden="true">▣</span></span><strong id="expiry-mid-count">0</strong><small>Lot</small>
+          </button>
+          <button class="metric-card metric-card-action" type="button" data-expiry-insight="long" aria-label="Son kullanma tarihi 90 günden uzun olan lotların ayrıntılarını aç" aria-controls="page-expiry-insight">
+            <span class="metric-top"><span>90 GÜNDEN FAZLA</span><span class="metric-icon green" aria-hidden="true">✓</span></span><strong id="expiry-long-count">0</strong><small>Lot</small>
+          </button>
+        </section>
+        <article class="panel table-panel">
+          <div class="panel-heading"><div><h3>SKT takibi</h3><p>Lotları son kullanma tarihine göre sıralayın.</p></div><button class="button button-quiet" type="button" id="export-batches">CSV'ye aktar</button></div>
+          <div class="filter-row">
+            <label class="search-field"><span>⌕</span><input id="batch-search" type="search" placeholder="Ürün adı, kod veya lot ara"></label>
+          </div>
+          <div class="tabs" role="tablist" aria-label="SKT filtresi">
+            <button class="filter-tab active" type="button" role="tab" aria-selected="true" data-expiry-filter="all">Tümü</button>
+            <button class="filter-tab" type="button" role="tab" aria-selected="false" data-expiry-filter="expired">SKT'si geçen</button>
+            <button class="filter-tab" type="button" role="tab" aria-selected="false" data-expiry-filter="near">Uyarı dönemi</button>
+            <button class="filter-tab" type="button" role="tab" aria-selected="false" data-expiry-filter="mid">30 - 90 gün</button>
+            <button class="filter-tab" type="button" role="tab" aria-selected="false" data-expiry-filter="long">90 günden fazla</button>
+          </div>
+          <div class="table-wrap">
+            <table><thead><tr><th>BAYİ</th><th>ÜRÜN</th><th>STOK KODU</th><th>LOT KODU</th><th>SKT TARİHİ</th><th>KALAN SÜRE</th><th>MİKTAR</th><th>DURUM</th></tr></thead>
+              <tbody id="batch-rows"><tr><td class="empty" colspan="8">Yükleniyor…</td></tr></tbody>
+            </table>
+          </div>
+          <nav class="product-pagination" id="batch-pagination" aria-label="Lot listesi sayfaları" hidden>
+            <button class="button button-quiet" type="button" id="batch-page-previous" aria-label="Önceki lot sayfası">← Önceki</button>
+            <span id="batch-page-label" aria-live="polite"></span>
+            <button class="button button-quiet" type="button" id="batch-page-next" aria-label="Sonraki lot sayfası">Sonraki →</button>
+          </nav>
+        </article>
+      </section>
+
+      <section id="page-expiry-insight" class="page">
+        <div class="product-insight-actions">
+          <button class="button button-quiet" type="button" data-page="expiry">← SKT takibine dön</button>
+        </div>
+        <section class="panel product-insight-hero" aria-labelledby="expiry-insight-title">
+          <div class="product-insight-heading">
+            <span class="metric-icon red product-insight-icon" id="expiry-insight-icon" aria-hidden="true"></span>
+            <div><p class="eyebrow">SON KULLANMA TARİHİ RAPORU</p><h2 id="expiry-insight-title">Lot durumu</h2><p id="expiry-insight-description"></p></div>
+          </div>
+          <div class="product-insight-count-card"><strong id="expiry-insight-count">0</strong><span>Lot kaydı</span></div>
+        </section>
+        <article class="panel product-insight-panel">
+          <div class="panel-heading"><div><h3 id="expiry-insight-list-title">Lot listesi</h3><p id="expiry-insight-list-summary"></p></div></div>
+          <label class="product-insight-search"><span aria-hidden="true">⌕</span><input id="expiry-insight-search" type="search" aria-label="Bu lot listesini ara" placeholder="Ürün, stok kodu, bayi veya lot ara"></label>
+          <div class="product-insight-list" id="expiry-insight-list" role="list" aria-label="SKT lotları"></div>
+          <nav class="product-insight-pagination" id="expiry-insight-pagination" aria-label="SKT lot sayfaları" hidden>
+            <button class="button button-quiet" type="button" id="expiry-insight-previous" aria-label="Önceki lotlar">← Önceki</button>
+            <span id="expiry-insight-page-label" aria-live="polite"></span>
+            <button class="button button-quiet" type="button" id="expiry-insight-next" aria-label="Sonraki lotlar">Sonraki →</button>
+          </nav>
+        </article>
+      </section>
+
+      <section id="page-categories" class="page">
+        <section class="metrics metrics-three">
+          <button class="metric-card metric-card-action" type="button" data-category-insight="categories" aria-label="Toplam kategori: kategori ayrıntılarını aç" aria-controls="page-category-insight">
+            <span class="metric-top"><span>TOPLAM KATEGORİ</span><span class="metric-icon blue" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M3 7.5h7l2 2h9v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-11Z"/><path d="M3 9.5h18"/></svg></span></span><strong id="category-count">0</strong><small>Kayıtlı kategori</small>
+          </button>
+          <button class="metric-card metric-card-action" type="button" data-category-insight="categorized" aria-label="Kategorili ürün: kategorisi olan ürünleri aç" aria-controls="page-category-insight">
+            <span class="metric-top"><span>KATEGORİLİ ÜRÜN</span><span class="metric-icon green" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="m3 12 9-9h7l2 2v7l-9 9-9-9Z"/><circle cx="16" cy="8" r="1"/></svg></span></span><strong id="categorized-count">0</strong><small>Bir kategoriye bağlı</small>
+          </button>
+          <button class="metric-card metric-card-action" type="button" data-category-insight="uncategorized" aria-label="Kategorisiz ürün: kategori atanmamış ürünleri aç" aria-controls="page-category-insight">
+            <span class="metric-top"><span>KATEGORİSİZ ÜRÜN</span><span class="metric-icon amber" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M12 3 22 20H2L12 3Z"/><path d="M12 9v5"/><circle cx="12" cy="17" r=".7"/></svg></span></span><strong id="uncategorized-count">0</strong><small>Kategori seçilmemiş</small>
+          </button>
+        </section>
+        <div class="page-split category-layout">
+          <article class="panel table-panel">
+            <div class="panel-heading"><div><h3>Kategoriler</h3><p>Kategorilere bağlı ürün sayılarını görüntüleyin.</p></div></div>
+            <div class="filter-row"><label class="search-field"><span>⌕</span><input id="category-search" type="search" placeholder="Kategori adı ara"></label></div>
+            <div class="table-wrap">
+              <table><thead><tr><th>KATEGORİ ADI</th><th>ÜRÜN SAYISI</th><th>TOPLAM STOK</th></tr></thead>
+                <tbody id="category-rows"><tr><td class="empty" colspan="3">Yükleniyor…</td></tr></tbody>
+              </table>
+            </div>
+          </article>
+          <article class="panel form-panel" data-admin-only hidden>
+            <div class="panel-heading"><div><h3>Yeni kategori</h3><p>Ürünleri gruplandırmak için kategori ekleyin.</p></div></div>
+            <form id="category-form">
+              <label>Kategori adı<input name="name" placeholder="Örn. İçecekler" required maxlength="80"></label>
+              <button class="button button-primary full-button" type="submit">Kategori ekle</button>
+            </form>
+          </article>
+        </div>
+      </section>
+
+      <section id="page-category-insight" class="page">
+        <div class="product-insight-actions">
+          <button class="button button-quiet" type="button" data-page="categories">← Kategorilere dön</button>
+        </div>
+        <section class="panel product-insight-hero" aria-labelledby="category-insight-title">
+          <div class="product-insight-heading">
+            <span class="metric-icon blue product-insight-icon" id="category-insight-icon" aria-hidden="true"></span>
+            <div><p class="eyebrow">KATEGORİ VE ÜRÜN RAPORU</p><h2 id="category-insight-title">Kategori durumu</h2><p id="category-insight-description"></p></div>
+          </div>
+          <div class="product-insight-count-card"><strong id="category-insight-count">0</strong><span id="category-insight-count-label">Kayıt</span></div>
+        </section>
+        <article class="panel product-insight-panel">
+          <div class="panel-heading"><div><h3 id="category-insight-list-title">Kategori listesi</h3><p id="category-insight-list-summary"></p></div></div>
+          <label class="product-insight-search"><span aria-hidden="true">⌕</span><input id="category-insight-search" type="search" aria-label="Bu kategori listesini ara" placeholder="Kategori, ürün veya stok kodu ara"></label>
+          <div class="product-insight-list" id="category-insight-list" role="list" aria-label="Kategori ve ürün ayrıntıları"></div>
+          <nav class="product-insight-pagination" id="category-insight-pagination" aria-label="Kategori detay sayfaları" hidden>
+            <button class="button button-quiet" type="button" id="category-insight-previous" aria-label="Önceki kayıtlar">← Önceki</button>
+            <span id="category-insight-page-label" aria-live="polite"></span>
+            <button class="button button-quiet" type="button" id="category-insight-next" aria-label="Sonraki kayıtlar">Sonraki →</button>
+          </nav>
+        </article>
+      </section>
+
+      <section id="page-reports" class="page">
+        <section class="metrics metrics-three">
+          <article class="metric-card"><div class="metric-top"><span>TOPLAM ÜRÜN</span><span class="metric-icon blue">◇</span></div><strong id="report-product-count">0</strong><small>Kayıtlı ürün çeşidi</small></article>
+          <article class="metric-card"><div class="metric-top"><span>TOPLAM STOK</span><span class="metric-icon green">▦</span></div><strong id="report-total-units">0</strong><small>Adet / birim</small></article>
+          <article class="metric-card"><div class="metric-top"><span>SKT KONTROLÜ</span><span class="metric-icon amber">◷</span></div><strong id="report-expiry-count">0</strong><small>Uyarı dönemi veya geçmiş lot</small></article>
+        </section>
+        <article class="panel report-insights-panel">
+          <div class="panel-heading"><div><h3>Akıllı talep ve transfer önerileri</h3><p>Çıkış hızına, mevcut bayi stoklarına ve SKT durumuna göre</p></div><div class="report-ai-actions"><button class="button button-primary" type="button" id="generate-ai-insights">AI önerilerini al</button><button class="button button-quiet" type="button" id="refresh-report-insights">Yerel analizi yenile</button></div></div>
+          <div id="report-insights" class="report-insights-list" aria-live="polite"></div>
+          <p id="ai-report-status" class="report-ai-status" role="status" aria-live="polite" hidden></p>
+          <section id="ai-report-result" class="report-ai-result" aria-labelledby="ai-report-title" hidden>
+            <div class="panel-heading"><div><h4 id="ai-report-title">OpenAI stok analizi</h4><p id="ai-report-meta"></p></div></div>
+            <p id="ai-report-summary" class="report-ai-summary"></p>
+            <div id="ai-report-insights" class="report-insights-list" aria-label="AI önerileri"></div>
+          </section>
+          <small class="report-insights-note">“AI önerilerini al” seçildiğinde ürün ve bayi adlarıyla toplu stok, SKT riski ve son 30 günlük çıkış özeti OpenAI'a gönderilir; kullanıcı adı, e-posta, barkod ve lot kodları gönderilmez. Yerel öneriler son 100 hareketle sınırlıdır; stok çıkışları her zaman satış anlamına gelmeyebilir. AI yanıtı öneri niteliğindedir ve transferi otomatik başlatmaz. Kullanım için sunucuda OPENAI_API_KEY tanımlanmalıdır.</small>
+        </article>
+        <div class="report-grid">
+          <article class="panel"><div class="panel-heading"><div><h3>SKT süre dağılımı</h3><p>Mevcut lotların kalan süresi</p></div></div><div id="report-expiry" class="report-bars"></div></article>
+          <article class="panel"><div class="panel-heading"><div><h3>Aylık stok giriş / çıkış özeti</h3><p>Yüklenen son 100 harekete göre</p></div></div><div id="report-movement" class="movement-chart report-chart"></div></article>
+        </div>
+        <article class="panel report-note"><strong>Rapor kapsamı</strong><p>Bu yerel MVP raporları kayıtlı ürün, lot ve son 100 stok hareketinden hesaplanır. Excel aktarımı ilgili liste ekranlarında kullanılabilir.</p></article>
+      </section>
+
+      <section id="page-settings" class="page">
+        <div class="settings-grid">
+          <article class="panel settings-card appearance-settings-card">
+            <div class="panel-heading"><div><h3>Görünüm</h3><p>Ekran temasını gündüz veya gece kullanımına göre seçin.</p></div><span class="metric-icon blue" aria-hidden="true">☼</span></div>
+            <div class="theme-options" role="group" aria-label="Renk teması">
+              <button class="theme-choice" type="button" data-theme-choice="light" aria-pressed="false">
+                <span class="theme-preview theme-preview-light" aria-hidden="true"></span>
+                <span><strong>Açık mod</strong><small>Gündüz kullanımı için aydınlık renkler</small></span>
+              </button>
+              <button class="theme-choice" type="button" data-theme-choice="dark" aria-pressed="true">
+                <span class="theme-preview theme-preview-dark" aria-hidden="true"></span>
+                <span><strong>Koyu mod</strong><small>Mevcut SaveStock görünümü</small></span>
+              </button>
+            </div>
+          </article>
+          <article class="panel settings-card" data-admin-only hidden>
+            <div class="panel-heading"><div><h3>Stok ve SKT ayarları</h3><p>Bu bilgisayardaki SaveStock görünümünü düzenleyin.</p></div><span class="metric-icon blue">⚙</span></div>
+            <form id="settings-form">
+              <label>SKT uyarısı kaç gün önceden başlasın?<input id="expiry-warning-days" name="expiry_warning_days" type="number" min="1" max="365" value="30" required></label>
+              <label>Kritik stok eşiği (ürün miktarı bu değere eşit veya altındaysa uyar)<input id="low-stock-threshold" name="low_stock_threshold" type="number" min="1" max="1000000" value="5" required></label>
+              <small class="help-text">Bu görünüm ayarları bu tarayıcıda saklanır. Kritik stok eşiği ürün kartlarındaki toplam miktara göre uygulanır.</small>
+              <button class="button button-primary" type="submit">Ayarları kaydet</button>
+            </form>
+          </article>
+          <article class="panel settings-card" data-admin-only hidden>
+            <div class="panel-heading"><div><h3>Yerel çalışma bilgisi</h3><p>Bu sürüm kendi bilgisayarınızda çalışır.</p></div><span class="metric-icon green">✓</span></div>
+            <div class="settings-list"><div><span>Veritabanı</span><strong>PostgreSQL</strong></div><div><span>Stok çıkış yöntemi</span><strong>FIFO · SKT öncelikli</strong></div><div><span>Hesap ve roller</span><strong>Yönetici ve kullanıcı</strong></div></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="page-users" class="page">
+        <section class="metrics metrics-three">
+          <button class="metric-card metric-card-action" type="button" data-user-insight="all" aria-label="Toplam hesap: tüm hesapların ayrıntılarını aç" aria-controls="page-user-insight">
+            <span class="metric-top"><span>TOPLAM HESAP</span><span class="metric-icon blue" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0m1-13a2.5 2.5 0 0 1 0 5m1 2a5 5 0 0 1 4 5"/></svg></span></span>
+            <strong id="user-total-count">0</strong><small>Yönetici ve kullanıcılar</small>
+          </button>
+          <button class="metric-card metric-card-action" type="button" data-user-insight="admins" aria-label="Yönetici hesapları: yönetici hesaplarının ayrıntılarını aç" aria-controls="page-user-insight">
+            <span class="metric-top"><span>YÖNETİCİ</span><span class="metric-icon purple" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M12 3 20 6v5c0 4.5-3.3 7.6-8 10-4.7-2.4-8-5.5-8-10V6l8-3Z"/><circle cx="12" cy="9" r="2.2"/><path d="M8.5 15a3.5 3.5 0 0 1 7 0"/></svg></span></span>
+            <strong id="user-admin-count">0</strong><small>Sistem yönetim yetkisi</small>
+          </button>
+          <button class="metric-card metric-card-action" type="button" data-user-insight="active" aria-label="Aktif kullanıcılar: giriş yapabilen hesapların ayrıntılarını aç" aria-controls="page-user-insight">
+            <span class="metric-top"><span>AKTİF KULLANICI</span><span class="metric-icon green" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16.5 9"/></svg></span></span>
+            <strong id="user-active-count">0</strong><small>Giriş yapabilen hesaplar</small>
+          </button>
+        </section>
+        <div class="page-split users-layout">
+          <article class="panel table-panel">
+            <div class="panel-heading"><div><h3>Kullanıcı hesapları</h3><p>Hesapları ve erişim durumlarını yönetin.</p></div></div>
+            <div class="table-wrap"><table><thead><tr><th>AD SOYAD</th><th>E-POSTA</th><th>ROL</th><th>BAYİ</th><th>HESAP AÇILIŞI</th><th>SON GİRİŞ</th><th>SON ÇIKIŞ</th><th>DURUM</th><th>İŞLEM</th></tr></thead>
+              <tbody id="user-rows"><tr><td class="empty" colspan="9">Yükleniyor…</td></tr></tbody>
+            </table></div>
+          </article>
+          <article class="panel form-panel">
+            <div class="panel-heading"><div><h3>Yeni hesap oluştur</h3><p>Hesap bilgilerini kullanıcıya güvenli şekilde iletin.</p></div></div>
+            <form id="user-form">
+              <label>Ad soyad<input name="full_name" placeholder="Örn. Ayşe Yılmaz" required minlength="2" maxlength="120"></label>
+              <label>E-posta<input name="email" type="email" placeholder="ornek@firma.com" required maxlength="254"></label>
+              <label>İlk şifre<input name="password" type="password" placeholder="En az 10 karakter" required minlength="10" maxlength="128"></label>
+              <label>Rol<select name="role" id="user-role"><option value="user">Kullanıcı</option><option value="admin">Yönetici</option></select></label>
+              <label id="user-dealer-label">Bağlı bayi<select name="dealer_id" id="user-dealer" required><option value="">Bayi seçin</option></select></label>
+              <button class="button button-primary full-button" type="submit">Hesap oluştur</button>
+            </form>
+            <small class="help-text">İlk şifreyi kullanıcıya güvenli bir yoldan iletin.</small>
+          </article>
+        </div>
+        <article class="panel table-panel activity-panel">
+          <div class="panel-heading"><div><h3>Kullanıcı işlem geçmişi</h3><p>Kullanıcı hesaplarının giriş/çıkış saatleri ve uygulama işlemleri.</p></div><button class="button button-quiet" type="button" id="refresh-user-activities">Yenile</button></div>
+          <div class="table-wrap"><table><thead><tr><th>TARİH / SAAT</th><th>KULLANICI</th><th>İŞLEM</th><th>AÇIKLAMA</th></tr></thead>
+            <tbody id="user-activity-rows"><tr><td class="empty" colspan="4">Yükleniyor…</td></tr></tbody>
+          </table></div>
+        </article>
+        <article class="panel table-panel activity-panel">
+          <div class="panel-heading"><div><h3>Yönetici işlem geçmişi</h3><p>Yönetici hesaplarının giriş/çıkış ve yönetim işlemleri.</p></div><button class="button button-quiet" type="button" id="refresh-admin-activities">Yenile</button></div>
+          <div class="table-wrap"><table><thead><tr><th>TARİH / SAAT</th><th>YÖNETİCİ</th><th>İŞLEM</th><th>AÇIKLAMA</th></tr></thead>
+            <tbody id="admin-activity-rows"><tr><td class="empty" colspan="4">Yükleniyor…</td></tr></tbody>
+          </table></div>
+        </article>
+      </section>
+
+      <section id="page-user-insight" class="page">
+        <div class="product-insight-actions">
+          <button class="button button-quiet" type="button" data-page="users">← Kullanıcılara dön</button>
+        </div>
+        <section class="panel product-insight-hero" aria-labelledby="user-insight-title">
+          <div class="product-insight-heading">
+            <span class="metric-icon blue product-insight-icon" id="user-insight-icon" aria-hidden="true"></span>
+            <div><p class="eyebrow">HESAP VE ERİŞİM RAPORU</p><h2 id="user-insight-title">Hesaplar</h2><p id="user-insight-description"></p></div>
+          </div>
+          <div class="product-insight-count-card"><strong id="user-insight-count">0</strong><span id="user-insight-count-label">Hesap</span></div>
+        </section>
+        <article class="panel product-insight-panel">
+          <div class="panel-heading"><div><h3 id="user-insight-list-title">Hesap listesi</h3><p id="user-insight-list-summary"></p></div></div>
+          <label class="product-insight-search"><span aria-hidden="true">⌕</span><input id="user-insight-search" type="search" aria-label="Hesap listesini ara" placeholder="Ad, e-posta, rol veya bayi ara"></label>
+          <div class="product-insight-list" id="user-insight-list" role="list" aria-label="Kullanıcı hesap ayrıntıları"></div>
+          <nav class="product-insight-pagination" id="user-insight-pagination" aria-label="Hesap detay sayfaları" hidden>
+            <button class="button button-quiet" type="button" id="user-insight-previous" aria-label="Önceki hesaplar">← Önceki</button>
+            <span id="user-insight-page-label" aria-live="polite"></span>
+            <button class="button button-quiet" type="button" id="user-insight-next" aria-label="Sonraki hesaplar">Sonraki →</button>
+          </nav>
+        </article>
+      </section>
+
+      <section id="page-billing" class="page">
+        <article class="panel billing-current-panel">
+          <div><p class="eyebrow">MAĞAZA ABONELİĞİ</p><h2 id="billing-store-name">Mağazanız</h2><p id="billing-current-copy">Abonelik durumunuz yükleniyor…</p></div>
+          <span id="billing-current-badge" class="badge mid">Yükleniyor</span>
+        </article>
+
+        <div class="billing-purchase-layout">
+          <section class="panel billing-options-panel">
+            <div class="panel-heading"><div><h3>Paketinizi seçin</h3><p>Aboneliğinizi ihtiyacınıza göre satın alın veya yenileyin.</p></div></div>
+            <div class="billing-plan-grid" id="billing-plan-cards" aria-label="Abonelik paketleri"></div>
+            <div class="billing-term-block"><h3>Abonelik süresi</h3><div class="billing-terms" role="group" aria-label="Abonelik süresi">
+              <button type="button" class="billing-term active" data-billing-term="1">1 Ay</button>
+              <button type="button" class="billing-term" data-billing-term="3">3 Ay</button>
+              <button type="button" class="billing-term" data-billing-term="6">6 Ay</button>
+              <button type="button" class="billing-term" data-billing-term="12">1 Yıl</button>
+            </div></div>
+          </section>
+
+          <aside class="panel billing-order-panel">
+            <div class="panel-heading"><div><h3>Sipariş özeti</h3><p>Ödemeyi PayTR’ın güvenli ekranında tamamlayın.</p></div></div>
+            <label class="billing-dealer-picker" data-admin-only hidden>Mağaza<select id="billing-dealer-select"></select></label>
+            <div class="billing-summary-line"><span>Paket</span><strong id="billing-summary-plan">KOBİ Başlangıç</strong></div>
+            <div class="billing-summary-line"><span>Süre</span><strong id="billing-summary-term">1 ay</strong></div>
+            <div class="billing-summary-line"><span>Ara toplam</span><strong id="billing-summary-net">₺0,00</strong></div>
+            <div class="billing-summary-line"><span>KDV (%20)</span><strong id="billing-summary-vat">₺0,00</strong></div>
+            <div class="billing-summary-total"><span>Ödenecek toplam</span><strong id="billing-summary-total">₺0,00</strong></div>
+            <button class="button button-primary full-button" id="billing-purchase-button" type="button" disabled>Satın al / yenile</button>
+            <p class="billing-note" id="billing-payment-note">Kart bilgileriniz SaveStock tarafından saklanmaz.</p>
+            <div id="billing-pending-panel" class="billing-pending-panel" hidden><p>Bu mağaza için bekleyen bir ödeme var.</p><button class="button button-quiet full-button" type="button" id="billing-resume-button" disabled>Ödemeye devam et</button></div>
+          </aside>
+        </div>
+
+        <section class="panel billing-checkout-panel" id="billing-checkout-panel" hidden>
+          <div class="panel-heading"><div><h3>Güvenli ödeme</h3><p>Ödeme işlemi PayTR tarafından korunur. Kart bilgileri bu uygulamaya kaydedilmez.</p></div><button class="button button-quiet" type="button" id="billing-close-checkout">Kapat</button></div>
+          <iframe id="paytriframe" title="PayTR güvenli ödeme ekranı" frameborder="0" scrolling="no"></iframe>
+        </section>
+      </section>
+
+      <section id="page-dealers" class="page" data-admin-only hidden>
+        <section class="metrics metrics-four">
+          <button class="metric-card metric-card-action" type="button" data-dealer-insight="dealers" aria-label="Erişilebilen bayilerin ayrıntılarını aç" aria-controls="page-dealer-insight">
+            <span class="metric-top"><span>ERİŞİLEBİLEN BAYİ</span><span class="metric-icon blue" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M3 20.5h18M5 20V5.5h14V20M8 8.5h2m4 0h2m-8 4h2m4 0h2m-8 4h2m4 0h2"/></svg></span></span><strong id="dealer-count">0</strong><small>Görüntüleme yetkiniz olan bayi / depo</small>
+          </button>
+          <button class="metric-card metric-card-action" type="button" data-dealer-insight="stock" aria-label="Erişilebilen bayilerdeki stok ayrıntılarını aç" aria-controls="page-dealer-insight">
+            <span class="metric-top"><span>TOPLAM STOK</span><span class="metric-icon green" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z"/><path d="m4.3 7.7 7.7 4.4 7.7-4.4M12 12.1V21"/></svg></span></span><strong id="dealer-total-units">0</strong><small>Erişiminiz olan bayilerdeki miktar</small>
+          </button>
+          <button class="metric-card metric-card-action" type="button" data-dealer-insight="near" aria-label="Yaklaşan SKT'li bayi lotlarının ayrıntılarını aç" aria-controls="page-dealer-insight">
+            <span class="metric-top"><span>YAKLAŞAN SKT</span><span class="metric-icon amber" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></span></span><strong id="dealer-near-expiry">0</strong><small>Önümüzdeki 30 gün</small>
+          </button>
+          <button class="metric-card metric-card-action" type="button" data-dealer-insight="expired" aria-label="SKT'si geçmiş bayi lotlarının ayrıntılarını aç" aria-controls="page-dealer-insight">
+            <span class="metric-top"><span>SKT'Sİ GEÇMİŞ</span><span class="metric-icon red" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M12 3 22 21H2L12 3Z"/><path d="M12 9v5m0 3h.01"/></svg></span></span><strong id="dealer-expired">0</strong><small>Kontrol edilmesi gereken lot</small>
+          </button>
+        </section>
+        <div class="page-split dealer-layout">
+          <article class="panel table-panel">
+            <div class="panel-heading"><div><h3>Bayi bazında stok özeti</h3><p>Erişiminiz olan her bayide ürün çeşidi, miktar ve SKT uyarıları.</p></div></div>
+            <div class="table-wrap"><table><thead><tr><th>BAYİ</th><th>ÜRÜN ÇEŞİDİ</th><th>TOPLAM STOK</th><th>YAKLAŞAN SKT</th><th>SKT'Sİ GEÇMİŞ</th><th>İŞLEM</th></tr></thead>
+              <tbody id="dealer-summary-rows"><tr><td class="empty" colspan="6">Yükleniyor…</td></tr></tbody>
+            </table></div>
+          </article>
+          <article class="panel form-panel" data-admin-only hidden>
+            <div class="panel-heading"><div><h3>Yeni bayi ekle</h3><p>Yeni bayi stok ve SKT takibine eklensin.</p></div></div>
+            <form id="dealer-form">
+              <label>Bayi adı<input name="name" placeholder="Örn. Ankara Bayi" required minlength="2" maxlength="120"></label>
+              <button class="button button-primary full-button" type="submit">Bayiyi kaydet</button>
+            </form>
+            <small class="help-text">Kullanıcı hesabını Kullanıcılar bölümünden oluşturup ilgili bayiye bağlayabilirsiniz.</small>
+          </article>
+        </div>
+        <article id="dealer-stock-panel" class="panel table-panel activity-panel">
+          <div class="panel-heading">
+            <div><h3 id="dealer-stock-title">Bayi bazında ürün stokları</h3><p id="dealer-stock-description">Ürünlerin hangi bayide ne kadar bulunduğu.</p></div>
+            <div class="dealer-stock-tools">
+              <label class="search-field dealer-stock-search"><span aria-hidden="true">⌕</span><input id="dealer-stock-search" type="search" placeholder="Ürün adı veya stok kodu ara..." aria-label="Bayi ürünlerinde ara" autocomplete="off"></label>
+              <button id="dealer-show-all" class="button button-quiet" type="button" hidden>Tüm bayileri göster</button>
+            </div>
+          </div>
+          <div class="table-wrap"><table><thead><tr><th>BAYİ</th><th>ÜRÜN</th><th>STOK KODU</th><th>MİKTAR</th><th>BİRİM</th></tr></thead>
+            <tbody id="dealer-stock-rows"><tr><td class="empty" colspan="5">Yükleniyor…</td></tr></tbody>
+          </table></div>
+        </article>
+        <article class="panel table-panel activity-panel">
+          <div class="panel-heading"><div><h3 id="dealer-expiry-title">Yaklaşan ve geçmiş SKT'ler</h3><p id="dealer-expiry-description">Lotlar bayi adıyla birlikte listelenir.</p></div></div>
+          <div class="table-wrap"><table><thead><tr><th>BAYİ</th><th>ÜRÜN</th><th>LOT</th><th>SKT TARİHİ</th><th>KALAN SÜRE</th><th>MİKTAR</th><th>DURUM</th></tr></thead>
+            <tbody id="dealer-expiry-rows"><tr><td class="empty" colspan="7">Yükleniyor…</td></tr></tbody>
+          </table></div>
+        </article>
+      </section>
+
+      <section id="page-dealer-insight" class="page">
+        <div class="product-insight-actions">
+          <button class="button button-quiet" type="button" data-page="dealers">← Bayi özetine dön</button>
+        </div>
+        <section class="panel product-insight-hero" aria-labelledby="dealer-insight-title">
+          <div class="product-insight-heading">
+            <span class="metric-icon blue product-insight-icon" id="dealer-insight-icon" aria-hidden="true"></span>
+            <div><p class="eyebrow">BAYİ VE DEPO RAPORU</p><h2 id="dealer-insight-title">Bayi durumu</h2><p id="dealer-insight-description"></p></div>
+          </div>
+          <div class="product-insight-count-card"><strong id="dealer-insight-count">0</strong><span id="dealer-insight-count-label">Kayıt</span></div>
+        </section>
+        <article class="panel product-insight-panel">
+          <div class="panel-heading"><div><h3 id="dealer-insight-list-title">Detay listesi</h3><p id="dealer-insight-list-summary"></p></div></div>
+          <label class="product-insight-search"><span aria-hidden="true">⌕</span><input id="dealer-insight-search" type="search" aria-label="Bu bayi listesini ara" placeholder="Bayi, ürün, stok kodu veya lot ara"></label>
+          <div class="product-insight-list" id="dealer-insight-list" role="list" aria-label="Bayi özeti ayrıntıları"></div>
+          <nav class="product-insight-pagination" id="dealer-insight-pagination" aria-label="Bayi detay sayfaları" hidden>
+            <button class="button button-quiet" type="button" id="dealer-insight-previous" aria-label="Önceki kayıtlar">← Önceki</button>
+            <span id="dealer-insight-page-label" aria-live="polite"></span>
+            <button class="button button-quiet" type="button" id="dealer-insight-next" aria-label="Sonraki kayıtlar">Sonraki →</button>
+          </nav>
+        </article>
+      </section>
+
+      <section id="page-stock-requests" class="page">
+        <section class="metrics metrics-three">
+          <button class="metric-card metric-card-action" type="button" data-request-insight="pending" aria-label="Bekleyen stok taleplerinin ayrıntılarını aç" aria-controls="page-request-insight">
+            <span class="metric-top"><span>BEKLEYEN TALEP</span><span class="metric-icon amber" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></span></span><strong id="request-pending-count">0</strong><small>Yönetici incelemesi bekliyor</small>
+          </button>
+          <button class="metric-card metric-card-action" type="button" data-request-insight="fulfilled" aria-label="Karşılanan stok taleplerinin ayrıntılarını aç" aria-controls="page-request-insight">
+            <span class="metric-top"><span>KARŞILANAN</span><span class="metric-icon green" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span></span><strong id="request-fulfilled-count">0</strong><small>Tam veya kısmi transfer</small>
+          </button>
+          <button class="metric-card metric-card-action" type="button" data-request-insight="rejected" aria-label="Reddedilen stok taleplerinin ayrıntılarını aç" aria-controls="page-request-insight">
+            <span class="metric-top"><span>REDDEDİLEN</span><span class="metric-icon red" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><circle cx="12" cy="12" r="9"/><path d="m9 9 6 6m0-6-6 6"/></svg></span></span><strong id="request-rejected-count">0</strong><small>Sonuçlandırılan talepler</small>
+          </button>
+        </section>
+        <div class="page-split request-layout">
+          <article class="panel form-panel request-create-panel">
+            <div class="panel-heading"><div><h3>Yeni stok talebi</h3><p>İhtiyaç duyduğunuz ürün ve miktarı bildirin.</p></div><span class="metric-icon blue">＋</span></div>
+            <form id="stock-request-form">
+              <label data-admin-only hidden>Talep sahibi bayi<select id="request-dealer-select" name="dealer_id" required></select></label>
+              <p class="request-own-dealer" id="request-own-dealer">Bağlı bayiniz yükleniyor…</p>
+              <label>Ürün<select class="product-select" name="product_id" required></select></label>
+              <div class="request-product-stock" id="request-product-stock" aria-live="polite">Ürün ve bayi seçildiğinde mevcut miktar burada görünür.</div>
+              <label>İstenen miktar<input name="requested_quantity" type="number" min="1" step="1" value="1" required></label>
+              <label>Açıklama <span class="optional-label">(isteğe bağlı)</span><textarea name="note" rows="3" maxlength="240" placeholder="Örn. satış yoğunluğu nedeniyle stok ihtiyacı"></textarea></label>
+              <button class="button button-primary full-button" type="submit">Talep oluştur</button>
+            </form>
+            <small class="help-text" id="request-help-text">Kaynak bayiyi yönetici belirler. Diğer bayilerin stok bilgileri hesabınıza gösterilmez.</small>
+          </article>
+          <article class="panel request-list-panel">
+            <div class="panel-heading"><div><h3 id="stock-request-list-title">Stok talepleri</h3><p id="stock-request-list-description">Taleplerinizin durumunu buradan izleyin.</p></div><button class="button button-quiet" type="button" id="refresh-stock-requests">Yenile</button></div>
+            <div id="stock-request-list" class="request-list"><div class="empty">Talepler yükleniyor…</div></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="page-request-insight" class="page">
+        <div class="product-insight-actions">
+          <button class="button button-quiet" type="button" data-page="stock-requests">← Stok taleplerine dön</button>
+        </div>
+        <section class="panel product-insight-hero" aria-labelledby="request-insight-title">
+          <div class="product-insight-heading">
+            <span class="metric-icon amber product-insight-icon" id="request-insight-icon" aria-hidden="true"></span>
+            <div><p class="eyebrow">STOK TALEBİ RAPORU</p><h2 id="request-insight-title">Talep durumu</h2><p id="request-insight-description"></p></div>
+          </div>
+          <div class="product-insight-count-card"><strong id="request-insight-count">0</strong><span>Talep</span></div>
+        </section>
+        <article class="panel product-insight-panel">
+          <div class="panel-heading"><div><h3 id="request-insight-list-title">Talep listesi</h3><p id="request-insight-list-summary"></p></div></div>
+          <label class="product-insight-search"><span aria-hidden="true">⌕</span><input id="request-insight-search" type="search" aria-label="Bu talep listesini ara" placeholder="Ürün, stok kodu, bayi veya talep sahibi ara"></label>
+          <div class="product-insight-list" id="request-insight-list" role="list" aria-label="Stok talepleri"></div>
+          <nav class="product-insight-pagination" id="request-insight-pagination" aria-label="Talep sayfaları" hidden>
+            <button class="button button-quiet" type="button" id="request-insight-previous" aria-label="Önceki talepler">← Önceki</button>
+            <span id="request-insight-page-label" aria-live="polite"></span>
+            <button class="button button-quiet" type="button" id="request-insight-next" aria-label="Sonraki talepler">Sonraki →</button>
+          </nav>
+        </article>
+      </section>
+
+      <section id="page-profile" class="page">
+        <div class="profile-grid">
+          <article class="panel settings-card">
+            <div class="panel-heading"><div><h3>Profil bilgileri</h3><p>Hesap bilgilerinizi görüntüleyin ve adınızı güncelleyin.</p></div><span class="user-avatar" id="profile-avatar">SS</span></div>
+            <form id="profile-form">
+              <label>Ad soyad<input id="profile-full-name" name="full_name" required minlength="2" maxlength="120"></label>
+              <label>E-posta<input id="profile-email" type="email" readonly></label>
+              <label>Rol<input id="profile-role" readonly></label>
+              <label>Bağlı bayi<input id="profile-dealer" readonly></label>
+              <label>Hesap oluşturulma tarihi<input id="profile-created-at" readonly></label>
+              <button class="button button-primary" type="submit">Profili kaydet</button>
+            </form>
+          </article>
+          <article class="panel settings-card">
+            <div class="panel-heading"><div><h3>Şifre değiştir</h3><p>Hesabınızın şifresini güncelleyin.</p></div><span class="metric-icon purple">⌑</span></div>
+            <form id="password-form">
+              <label>Mevcut şifre<input name="current_password" type="password" autocomplete="current-password" required maxlength="128"></label>
+              <label>Yeni şifre<input name="new_password" type="password" autocomplete="new-password" required minlength="10" maxlength="128"></label>
+              <label>Yeni şifreyi tekrar girin<input name="confirm_password" type="password" autocomplete="new-password" required minlength="10" maxlength="128"></label>
+              <button class="button button-primary" type="submit">Şifreyi güncelle</button>
+            </form>
+            <small class="help-text">Yeni şifre en az 10 karakter olmalıdır.</small>
+          </article>
+        </div>
+        <article class="panel table-panel activity-panel">
+          <div class="panel-heading"><div><h3>İşlem geçmişim</h3><p>Giriş/çıkış saatleriniz ve yaptığınız işlemler.</p></div></div>
+          <div class="table-wrap"><table><thead><tr><th>TARİH / SAAT</th><th>İŞLEM</th><th>AÇIKLAMA</th></tr></thead>
+            <tbody id="own-activity-rows"><tr><td class="empty" colspan="3">Yükleniyor…</td></tr></tbody>
+          </table></div>
+        </article>
+      </section>
+
+      <footer>SaveStock · Yerel geliştirme sürümü <a href="/docs" target="_blank" rel="noreferrer">API belgeleri</a></footer>
+    </main>
+    <dialog class="scanner-dialog product-edit-dialog" id="product-edit-dialog" aria-labelledby="product-edit-title">
+      <section class="scanner-card">
+        <header class="scanner-header">
+          <div><p class="eyebrow">ÜRÜN KATALOĞU</p><h2 id="product-edit-title">Ürünü düzenle</h2></div>
+          <button class="icon-button scanner-close" id="product-edit-close" type="button" aria-label="Düzenlemeyi kapat">×</button>
+        </header>
+        <form id="product-edit-form" class="product-edit-form">
+          <label>Stok kodu<input name="sku" required maxlength="64"><small class="field-error" data-error-for="sku" hidden></small></label>
+          <label>Barkod<input name="barcode" maxlength="80" autocomplete="off"><small class="field-error" data-error-for="barcode" hidden></small></label>
+          <label>Ürün adı<input name="name" required maxlength="160"><small class="field-error" data-error-for="name" hidden></small></label>
+          <div class="form-row">
+            <label>Kategori<select name="category_id" id="product-edit-category"></select><small class="field-error" data-error-for="category_id" hidden></small></label>
+            <label>Birim<input name="unit" required maxlength="24"><small class="field-error" data-error-for="unit" hidden></small></label>
+          </div>
+          <div class="product-edit-error" id="product-edit-error" role="alert" hidden></div>
+          <div class="product-edit-actions"><button class="button button-quiet" id="product-edit-cancel" type="button">İptal</button><button class="button button-primary" type="submit">Değişiklikleri kaydet</button></div>
+        </form>
+      </section>
+    </dialog>
+    <dialog class="scanner-dialog" id="barcode-scanner-dialog" aria-labelledby="barcode-scanner-title">
+      <section class="scanner-card">
+        <header class="scanner-header">
+          <div><p class="eyebrow">ÜRÜN EKLEME</p><h2 id="barcode-scanner-title">Barkod okut</h2></div>
+          <button class="mobile-menu-close scanner-close" id="barcode-scanner-close" type="button" aria-label="Tarayıcıyı kapat">×</button>
+        </header>
+        <p class="scanner-help" id="barcode-scanner-help">Ürün barkodunu çerçeveye hizalayın.</p>
+        <div id="barcode-reader" class="barcode-reader"></div>
+        <p class="scanner-status" id="barcode-scanner-status" role="status" aria-live="polite">Kamera hazırlanıyor…</p>
+        <button class="button button-quiet full-button" id="barcode-scanner-cancel" type="button">Kapat</button>
+      </section>
+    </dialog>
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="/static/app.js?v=38"></script>
+</body>
+</html>

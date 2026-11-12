@@ -1,0 +1,18 @@
+{
+  "id": "/",
+  "name": "SaveStock · Akıllı Stok Yönetimi",
+  "short_name": "SaveStock",
+  "description": "Stok, lot ve son kullanma tarihi yönetimi.",
+  "lang": "tr-TR",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "theme_color": "#080d16",
+  "background_color": "#080d16",
+  "icons": [
+    { "src": "/static/icons/savestock-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/static/icons/savestock-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b1018">
+  <title>SaveStock Control</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <button id="menu-toggle" class="menu-toggle" type="button" aria-label="Menüyü aç" aria-expanded="false" aria-controls="control-sidebar" hidden>
+        <span></span><span></span><span></span>
+      </button>
+      <a class="brand" href="/" aria-label="SaveStock Control ana sayfa">
+        <span class="brand-mark">SC</span>
+        <span><strong>SaveStock</strong><small>CONTROL CENTER</small></span>
+      </a>
+      <span class="local-badge"><i></i><span id="network-label">Bu bilgisayara özel</span></span>
+    </header>
+
+    <section id="auth-view" class="auth-view" hidden>
+      <div class="auth-card">
+        <div class="auth-icon" aria-hidden="true">◈</div>
+        <p class="eyebrow" id="auth-eyebrow">GELİŞTİRİCİ ERİŞİMİ</p>
+        <h1 id="auth-title">SaveStock Control</h1>
+        <p class="auth-copy" id="auth-copy">SaveStock ürününün durumunu güvenli yönetim alanından takip edin.</p>
+        <form id="auth-form">
+          <label>Kullanıcı adı<input id="auth-username" name="username" autocomplete="username" required minlength="3" maxlength="64"></label>
+          <label>Parola<input id="auth-password" name="password" type="password" autocomplete="current-password" required minlength="14" maxlength="256"></label>
+          <label id="confirm-label" hidden>Parolayı tekrar girin<input id="auth-confirm" name="confirm" type="password" autocomplete="new-password" minlength="14" maxlength="256"></label>
+          <p id="auth-error" class="error-message" role="alert" hidden></p>
+          <button class="primary-button" id="auth-submit" type="submit">Giriş yap</button>
+        </form>
+        <p class="security-note" id="setup-note" hidden>İlk açılış: Bu bilgisayarda kullanılacak geliştirici hesabını oluşturun. Açık kayıt veya parola kurtarma bulunmaz.</p>
+        <p class="security-note network-warning" id="network-warning" hidden>Yerel ağ erişimi açık. HTTP bağlantısı şifrelenmez; yalnızca güvendiğiniz Wi-Fi ağında kullanın.</p>
+      </div>
+    </section>
+
+    <section id="dashboard-view" hidden>
+      <div class="page-heading">
+        <div><p class="eyebrow">ÜRÜN YÖNETİMİ</p><h1 id="page-title">Genel Bakış</h1><p id="page-description">Bugün dikkat etmeniz gerekenler ve SaveStock ürününüzün durumu.</p></div>
+      </div>
+
+      <button id="menu-backdrop" class="menu-backdrop" type="button" aria-label="Menüyü kapat" tabindex="-1" hidden></button>
+      <nav id="control-sidebar" class="control-menu" aria-label="Yönetim menüsü" aria-hidden="true">
+        <div class="sidebar-header">
+          <a class="sidebar-brand" href="/" aria-label="SaveStock Control">
+            <span class="brand-mark">SC</span>
+            <span><strong>SaveStock</strong><small>CONTROL CENTER</small></span>
+          </a>
+          <button id="menu-close" class="menu-close" type="button" aria-label="Menüyü kapat">×</button>
+        </div>
+        <p class="sidebar-section-title">YÖNETİM PANELİ</p>
+        <div class="sidebar-links">
+          <button class="menu-item active" type="button" data-page="overview" aria-current="page"><span class="menu-icon" aria-hidden="true">⌂</span><span class="menu-label">Genel Bakış</span><span class="menu-chevron" aria-hidden="true">›</span></button>
+          <button class="menu-item" type="button" data-page="status"><span class="menu-icon" aria-hidden="true">◉</span><span class="menu-label">Durum ve Uyarılar</span><i>Planlandı</i></button>
+          <button class="menu-item" type="button" data-page="customers"><span class="menu-icon" aria-hidden="true">♧</span><span class="menu-label">Müşteri / Bayiler</span><i>Planlandı</i></button>
+          <button class="menu-item" type="button" data-page="backups"><span class="menu-icon" aria-hidden="true">⤓</span><span class="menu-label">Yedekleme</span><i>Planlandı</i></button>
+          <button class="menu-item" type="button" data-page="subscriptions"><span class="menu-icon" aria-hidden="true">◇</span><span class="menu-label">Abonelikler</span><i>Planlandı</i></button>
+          <button class="menu-item" type="button" data-page="audit"><span class="menu-icon" aria-hidden="true">≡</span><span class="menu-label">Yönetici Kayıtları</span><i>Planlandı</i></button>
+          <button class="menu-item" type="button" data-page="tools"><span class="menu-icon" aria-hidden="true">⚙</span><span class="menu-label">Geliştirici Araçları</span><i>Planlandı</i></button>
+        </div>
+        <div class="sidebar-bottom">
+          <div class="developer-card">
+            <span class="developer-avatar" aria-hidden="true">SC</span>
+            <span class="developer-details"><strong id="sidebar-developer-name">Geliştirici</strong><small><i></i> Yerel yönetici</small></span>
+          </div>
+          <button id="logout-button" class="logout-button" type="button"><span aria-hidden="true">↪</span> Güvenli çıkış</button>
+          <p class="sidebar-local-note"><span></span> Bu bilgisayara özel erişim</p>
+        </div>
+      </nav>
+      <section id="planned-page" class="planned-page" hidden aria-live="polite"></section>
+
+      <section id="overview-content" class="overview-content">
+        <section class="overview-banner">
+          <div class="overview-banner-copy">
+            <span class="banner-label">SAVESTOCK ÜRÜN ÖZETİ</span>
+            <h2>Günün kontrolü</h2>
+            <p id="overview-summary">Sistem sağlığına ve ilgilenilmesi gereken konulara hızlıca göz atın.</p>
+          </div>
+          <div class="banner-status"><span id="overview-status-symbol" aria-hidden="true">✓</span><span><small>SİSTEM DURUMU</small><strong id="overview-status-title">Bağlantı denetleniyor</strong></span></div>
+        </section>
+
+        <section class="overview-section attention-section" aria-labelledby="attention-title">
+          <div class="section-heading">
+            <div><p class="eyebrow">ÖNCELİKLİ</p><h2 id="attention-title">Dikkat edilmesi gerekenler</h2></div>
+            <button id="refresh-button" class="quiet-button refresh-button" type="button"><span aria-hidden="true">↻</span> Yenile</button>
+          </div>
+          <div id="attention-list" class="attention-list" aria-live="polite">
+            <article class="attention-card attention-loading"><span class="attention-icon" aria-hidden="true">…</span><div><strong>Kontrol ediliyor</strong><p>Güncel durum alınıyor.</p></div></article>
+          </div>
+        </section>
+
+        <section class="overview-section health-section">
+          <div class="section-heading">
+            <div><p class="eyebrow">İŞLETME DURUMU</p><h2>Ürün sağlığı</h2></div>
+            <span id="overview-updated-at" class="updated-label">Güncelleniyor</span>
+          </div>
+          <div class="health-grid">
+            <article class="health-card"><span class="health-icon purple" aria-hidden="true">◇</span><div><small>AKTİF ABONELİK</small><strong id="count-active-subscriptions">—</strong><span>Ürün müşterileri</span></div></article>
+            <article class="health-card"><span class="health-icon amber" aria-hidden="true">◷</span><div><small>YENİLEME YAKIN</small><strong id="count-expiring-subscriptions">—</strong><span>Önümüzdeki 30 gün</span></div></article>
+            <article class="health-card"><span class="health-icon red" aria-hidden="true">₺</span><div><small>ÖDEME TAKİBİ</small><strong id="count-overdue-payments">—</strong><span>Geciken / başarısız</span></div></article>
+            <article class="health-card"><span class="health-icon green" aria-hidden="true">⌁</span><div><small>SON UYGULAMA ETKİNLİĞİ</small><strong id="overview-latest-activity">—</strong><span>SaveStock kullanıcı işlemi</span></div></article>
+          </div>
+        </section>
+
+        <article class="info-card overview-note">
+          <div><p class="eyebrow">GÜVENLİ YÖNETİM</p><h2>Kontrol sizde</h2>
+            <p>Bu panel yalnızca bu bilgisayarda açılır ve şu an verileri salt okunur izler. Müşteri parolaları ve ürün hareketi ayrıntıları gösterilmez.</p>
+          </div>
+          <span class="local-badge"><i></i> Yerel ve salt okunur</span>
+        </article>
+        <p id="overview-error" class="error-message" role="alert" hidden></p>
+      </section>
+
+      <article class="status-card legacy-overview" id="status-card">
+        <div class="status-symbol" id="status-symbol" aria-hidden="true">✓</div>
+        <div class="status-copy"><span>SAVESTOCK VERİTABANI</span><strong id="status-title">Bağlantı denetleniyor</strong><small id="status-detail">Güvenli bağlantı kuruluyor…</small></div>
+        <button id="legacy-refresh-button" class="quiet-button" type="button">Yenile</button>
+      </article>
+
+      <section class="metrics legacy-overview" aria-label="SaveStock özeti">
+        <article class="metric"><span>ÜRÜN</span><strong id="count-products">—</strong><small>Kayıtlı ürün çeşidi</small></article>
+        <article class="metric"><span>BAYİ</span><strong id="count-dealers">—</strong><small>Kayıtlı bayi / depo</small></article>
+        <article class="metric"><span>KULLANICI</span><strong id="count-users">—</strong><small><span id="count-active-users">—</span> aktif hesap</small></article>
+        <article class="metric"><span>STOK</span><strong id="count-stock">—</strong><small>Toplam eldeki miktar</small></article>
+        <article class="metric"><span>KATEGORİ</span><strong id="count-categories">—</strong><small>Ürün grubu</small></article>
+        <article class="metric"><span>ABONELİK</span><strong id="count-subscriptions">—</strong><small>Kayıtlı abonelik</small></article>
+      </section>
+
+      <article class="info-card legacy-overview">
+        <div><p class="eyebrow">YÖNETİM SINIRI</p><h2>Ayrı, yerel ve salt okunur</h2>
+          <p>Control ayrı bir giriş kullanır ve yalnızca bu bilgisayardan açılır. Bu ilk sürüm ürün verilerini değiştirmez, müşteri parolalarını veya hareket ayrıntılarını göstermez.</p>
+        </div>
+        <dl><div><dt>Geliştirici hesabı</dt><dd id="developer-name">—</dd></div><div><dt>Son uygulama etkinliği</dt><dd id="latest-activity">—</dd></div><div><dt>Özet alındı</dt><dd id="updated-at">—</dd></div></dl>
+      </article>
+      <p id="dashboard-error" class="error-message legacy-overview" role="alert" hidden></p>
+    </section>
+    <footer>SaveStock Control · Geliştirici yönetim alanı</footer>
+  </main>
+</body>
+</html>

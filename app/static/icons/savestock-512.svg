@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#28a9ff"/><stop offset="1" stop-color="#3646ec"/></linearGradient>
+    <radialGradient id="glow"><stop stop-color="#143b91" stop-opacity=".7"/><stop offset="1" stop-color="#080d16" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#080d16"/>
+  <circle cx="256" cy="256" r="250" fill="url(#glow)"/>
+  <path d="M109 170c0-36 27-60 67-60h117v51H181c-13 0-20 5-20 15 0 9 7 14 20 18l65 19c43 13 63 36 63 71 0 39-29 64-76 64H110v-52h119c17 0 25-5 25-16 0-10-7-15-22-20l-65-19c-40-12-58-34-58-71Z" fill="#eef4ff"/>
+  <path d="M285 111h118v51h-89c-13 0-20 5-20 15 0 9 7 14 21 18l65 19c41 12 61 35 61 69 0 41-29 65-77 65H246v-52h118c17 0 25-5 25-16 0-10-7-15-22-20l-64-19c-41-12-60-34-60-70 0-37 29-60 72-60Z" fill="url(#blue)"/>
+  <path d="M149 407h214" stroke="url(#blue)" stroke-width="12" stroke-linecap="round"/>
+  <text x="256" y="452" text-anchor="middle" fill="#aebbd1" font-family="Arial,sans-serif" font-size="22" font-weight="700" letter-spacing="7">STOK YÖNETİMİ</text>
+</svg>

@@ -1,0 +1,2 @@
+"""SaveStock local inventory application."""
+
