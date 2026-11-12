@@ -210,3 +210,7 @@ PAYTR_TEST_USER_IP=
 ## Dağıtım sınırları
 
 Docker Compose yerel ve tek sunucu kurulumu için taşınabilir bir temel sağlar; belirli bir bulut sağlayıcısına dağıtım, TLS sertifikası, DNS, dış yedek kopyalama ve yedekleme zamanlaması sağlayıcı/işletim ortamına göre ayrıca yapılandırılmalıdır. Hassas veriler uygulama imajına veya repoya eklenmemelidir.
+
+## Lisans
+
+Bu proje [MIT Lisansı](LICENSE) ile lisanslanmıştır.
