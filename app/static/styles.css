@@ -1083,6 +1083,11 @@ input:focus-visible, select:focus-visible { box-shadow: var(--focus-ring); }
 :root[data-theme="light"] .scanner-status.error { color: #a32231; }
 :root[data-theme="light"] .barcode-reader { background: #edf1f6; border-color: #cbd5e1; }
 :root[data-theme="light"] .auth-screen { background: radial-gradient(ellipse at 18% 20%,#dbe9ff,transparent 36%),radial-gradient(ellipse at 88% 82%,#eee3ff,transparent 30%),#f2f5f9; }
+:root[data-theme="light"] .offline-sync-banner { background: #edf5ff; border-color: #9dbbe8; }
+:root[data-theme="light"] .offline-sync-banner strong { color: #17345d; }
+:root[data-theme="light"] .offline-sync-banner p,
+:root[data-theme="light"] .offline-sync-banner li,
+:root[data-theme="light"] .offline-settings-status { color: #435168; }
 :root[data-theme="light"] .auth-shell { background: #fff; border-color: #d8e0ea; box-shadow: 0 24px 90px #23344d1f; }
 :root[data-theme="light"] .auth-brand-panel { border-color: #d8e0ea; background: radial-gradient(ellipse at 75% 62%,#dce8ff,transparent 38%),linear-gradient(150deg,#f3f7ff,#fff 70%); }
 :root[data-theme="light"] .auth-brand-copy > p:last-child,
@@ -1154,4 +1159,28 @@ input:focus-visible, select:focus-visible { box-shadow: var(--focus-ring); }
 :root[data-theme="light"] .data-load-error { color: #8f1d2a; background: #fff0f1; border-color: #eab8bf; }
 @media (max-width: 520px) {
   .data-load-error { align-items: stretch; flex-direction: column; }
+}
+.offline-sync-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  border: 1px solid #456b9f;
+  border-radius: 10px;
+  background: #142238;
+}
+.offline-sync-copy { min-width: 0; }
+.offline-sync-banner strong { color: #dce9ff; font-size: 13px; }
+.offline-sync-banner p { margin: 4px 0 0; color: #b6c4d9; font-size: 11px; line-height: 1.5; }
+.offline-sync-banner ul { display: grid; gap: 4px; margin: 8px 0 0; padding-left: 18px; color: #d4dfef; font-size: 11px; }
+.offline-sync-actions { display: flex; flex: 0 0 auto; flex-wrap: wrap; gap: 8px; }
+.offline-settings-card { margin-bottom: 14px; }
+.offline-settings-status { margin: 8px 0; color: var(--muted); font-size: 11px; }
+.offline-settings-card .form-row { margin-bottom: 10px; }
+.offline-settings-card .help-text { margin: 0 0 12px; }
+@media (max-width: 650px) {
+  .offline-sync-banner { align-items: stretch; flex-direction: column; }
+  .offline-sync-actions { display: grid; grid-template-columns: repeat(auto-fit,minmax(140px,1fr)); }
 }

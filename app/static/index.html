@@ -17,7 +17,7 @@
       if (theme === "light") document.documentElement.dataset.theme = "light";
     }());
   </script>
-  <link rel="stylesheet" href="/static/styles.css?v=38">
+  <link rel="stylesheet" href="/static/styles.css?v=43">
 </head>
 <body>
   <section id="auth-screen" class="auth-screen" aria-live="polite" hidden>
@@ -47,6 +47,14 @@
             <label>Şifre<input name="password" type="password" autocomplete="new-password" placeholder="En az 10 karakter" required minlength="10" maxlength="128"></label>
             <label>Şifreyi tekrar girin<input name="password_confirm" type="password" autocomplete="new-password" placeholder="Şifreyi tekrar yazın" required minlength="10" maxlength="128"></label>
             <button class="button button-primary full-button" type="submit">Yönetici hesabı oluştur</button>
+          </form>
+        </section>
+        <section id="offline-unlock-panel" class="auth-card" hidden>
+          <p class="eyebrow">BU CİHAZDA KAYITLI</p><h2>Çevrimdışı kasayı açın</h2>
+          <p class="auth-description" id="offline-unlock-description">Kaydedilmiş stok verileri ve bekleyen işlemler PIN ile korunuyor.</p>
+          <form id="offline-unlock-form" class="auth-form">
+            <label>Çevrimdışı PIN<input name="pin" type="password" autocomplete="off" required minlength="8" maxlength="128"></label>
+            <button class="button button-primary full-button" type="submit">Kasayı aç</button>
           </form>
         </section>
         <p id="auth-message" class="auth-message" role="alert" hidden></p>
@@ -115,6 +123,18 @@
         <span id="data-load-error-message"></span>
         <button class="button button-quiet" id="retry-data-load" type="button">Yeniden dene</button>
       </div>
+      <section class="offline-sync-banner" id="offline-sync-banner" role="status" aria-live="polite" hidden>
+        <div class="offline-sync-copy">
+          <strong id="offline-sync-title">Çevrimdışı durum</strong>
+          <p id="offline-sync-message"></p>
+          <ul id="offline-queue-list"></ul>
+        </div>
+        <div class="offline-sync-actions">
+          <button class="button button-primary" id="offline-sync-button" type="button" hidden>Şimdi eşitle</button>
+          <button class="button button-quiet" id="offline-login-button" type="button" hidden>Giriş yap</button>
+          <button class="button button-quiet" id="offline-discard-button" type="button" hidden>Bekleyenleri sil</button>
+        </div>
+      </section>
 
       <section id="page-overview" class="page active">
         <section class="welcome">
@@ -804,6 +824,19 @@
             <small class="help-text">Yeni şifre en az 10 karakter olmalıdır.</small>
           </article>
         </div>
+        <article class="panel offline-settings-card" id="offline-settings-card">
+          <div class="panel-heading"><div><h3>Çevrimdışı erişim</h3><p>Son ürün ve lot bilgilerini bu cihazda şifreli saklayın; stok işlemlerini bağlantı gelince eşitleyin.</p></div></div>
+          <form id="offline-pin-form">
+            <div class="form-row">
+              <label>Çevrimdışı PIN<input name="pin" type="password" autocomplete="new-password" required minlength="8" maxlength="128"></label>
+              <label>PIN'i tekrar girin<input name="pin_confirm" type="password" autocomplete="new-password" required minlength="8" maxlength="128"></label>
+            </div>
+            <p class="help-text">En az 8 karakter kullanın. PIN hesabınızın şifresinden ayrıdır; unutulursa bu cihazdaki bekleyen işlemler kurtarılamaz.</p>
+            <button class="button button-primary" type="submit" id="offline-pin-save">Çevrimdışı erişimi etkinleştir</button>
+          </form>
+          <p class="offline-settings-status" id="offline-settings-status" role="status" aria-live="polite"></p>
+          <button class="button button-quiet" id="offline-clear-button" type="button" hidden>Bu cihazdaki çevrimdışı verileri sil</button>
+        </article>
         <article class="panel table-panel activity-panel">
           <div class="panel-heading"><div><h3>İşlem geçmişim</h3><p>Giriş/çıkış saatleriniz ve yaptığınız işlemler.</p></div></div>
           <div class="table-wrap"><table><thead><tr><th>TARİH / SAAT</th><th>İŞLEM</th><th>AÇIKLAMA</th></tr></thead>
@@ -847,6 +880,7 @@
     </dialog>
   </div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/static/app.js?v=38"></script>
+  <script src="/static/offline-store.js?v=43"></script>
+  <script src="/static/app.js?v=43"></script>
 </body>
 </html>

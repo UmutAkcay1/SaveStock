@@ -91,6 +91,15 @@ CREATE TABLE IF NOT EXISTS auth_login_attempts (
 CREATE INDEX IF NOT EXISTS ix_auth_login_attempts_window_started
     ON auth_login_attempts(window_started);
 
+CREATE TABLE IF NOT EXISTS stock_idempotency_records (
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    key VARCHAR(128) NOT NULL,
+    payload_hash VARCHAR(64) NOT NULL,
+    response_body JSON NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, key)
+);
+
 ALTER TABLE user_sessions
     ADD COLUMN IF NOT EXISTS login_activity_recorded BOOLEAN NOT NULL DEFAULT FALSE;
 

@@ -19,7 +19,7 @@ from urllib.parse import parse_qs, urlparse
 import uuid
 
 import httpx
-from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -31,7 +31,7 @@ from sqlalchemy.orm import Session
 
 from app.config import allowed_hosts, cookie_secure, environment, validate_runtime_configuration
 from app.database import SessionLocal, get_db
-from app.models import AuthLoginAttempt, Batch, BillingPayment, BillingSubscription, Category, Dealer, Product, StockMovement, StockRequest, User, UserActivity, UserSession
+from app.models import AuthLoginAttempt, Batch, BillingPayment, BillingSubscription, Category, Dealer, Product, StockIdempotency, StockMovement, StockRequest, User, UserActivity, UserSession
 from app.observability import configure_logging
 from app.schemas import (
     CategoryCreate,
@@ -248,6 +248,61 @@ def record_activity(
     if created_at is not None:
         values["created_at"] = created_at
     db.add(UserActivity(**values))
+
+
+def stock_request_hash(payload: InboundCreate | OutboundCreate | StockAdjustmentCreate) -> str:
+    canonical = json.dumps(payload.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def replay_stock_operation(
+    db: Session,
+    user: User,
+    key: str | None,
+    payload: InboundCreate | OutboundCreate | StockAdjustmentCreate,
+) -> dict | None:
+    if key is None:
+        return None
+    key = key.strip()
+    if not key or len(key) > 128:
+        raise HTTPException(status_code=422, detail="Idempotency-Key uzunluğu 1 ile 128 karakter arasında olmalı.")
+    record = db.get(StockIdempotency, (user.id, key))
+    if record is None:
+        return None
+    if record.payload_hash != stock_request_hash(payload):
+        raise HTTPException(status_code=409, detail="Bu işlem anahtarı farklı bir stok işlemi için kullanılmış.")
+    return record.response_body
+
+
+def commit_stock_operation(
+    db: Session,
+    user: User,
+    key: str | None,
+    payload: InboundCreate | OutboundCreate | StockAdjustmentCreate,
+    response_body: dict,
+) -> dict:
+    if key is None:
+        db.commit()
+        return response_body
+
+    normalized_key = key.strip()
+    db.add(StockIdempotency(
+        user_id=user.id,
+        key=normalized_key,
+        payload_hash=stock_request_hash(payload),
+        response_body=response_body,
+    ))
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        record = db.get(StockIdempotency, (user.id, normalized_key))
+        if record is None:
+            raise
+        if record.payload_hash != stock_request_hash(payload):
+            raise HTTPException(status_code=409, detail="Bu işlem anahtarı farklı bir stok işlemi için kullanılmış.")
+        return record.response_body
+    return response_body
 
 
 def public_activity(activity: UserActivity, user_name: str | None, role: str | None) -> dict:
@@ -1945,7 +2000,15 @@ async def create_ai_report_insights(
 
 
 @app.post("/api/stock/inbound", status_code=201)
-def receive_stock(payload: InboundCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def receive_stock(
+    payload: InboundCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+):
+    replay = replay_stock_operation(db, current_user, idempotency_key, payload)
+    if replay is not None:
+        return replay
     product = db.get(Product, payload.product_id)
     if product is None:
         raise HTTPException(status_code=404, detail="Ürün bulunamadı.")
@@ -1991,17 +2054,24 @@ def receive_stock(payload: InboundCreate, db: Session = Depends(get_db), current
         "STOCK_IN",
         f"{dealer.name}: {product.name} / {batch.batch_code} için {payload.quantity} {product.unit} stok girişi yaptı.",
     )
-    db.commit()
-    db.refresh(batch)
-    return {
+    result = {
         "batch_id": batch.id,
         "batch_code": batch.batch_code,
         "quantity_on_hand": batch.quantity_on_hand,
     }
+    return commit_stock_operation(db, current_user, idempotency_key, payload, result)
 
 
 @app.post("/api/stock/outbound")
-def issue_stock(payload: OutboundCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def issue_stock(
+    payload: OutboundCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+):
+    replay = replay_stock_operation(db, current_user, idempotency_key, payload)
+    if replay is not None:
+        return replay
     product = db.get(Product, payload.product_id)
     if product is None:
         raise HTTPException(status_code=404, detail="Ürün bulunamadı.")
@@ -2050,8 +2120,8 @@ def issue_stock(payload: OutboundCreate, db: Session = Depends(get_db), current_
         "STOCK_OUT",
         f"{dealer.name}: {product.name} için toplam {payload.quantity} {product.unit} stok çıkışı yaptı.",
     )
-    db.commit()
-    return {"product_id": product.id, "issued_quantity": payload.quantity, "allocations": allocations}
+    result = {"product_id": product.id, "issued_quantity": payload.quantity, "allocations": allocations}
+    return commit_stock_operation(db, current_user, idempotency_key, payload, result)
 
 
 @app.post("/api/stock/adjustment")
@@ -2059,7 +2129,11 @@ def adjust_stock(
     payload: StockAdjustmentCreate,
     db: Session = Depends(get_db),
     admin: User = Depends(require_admin),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
+    replay = replay_stock_operation(db, admin, idempotency_key, payload)
+    if replay is not None:
+        return replay
     product = db.get(Product, payload.product_id)
     if product is None:
         raise HTTPException(status_code=404, detail="Ürün bulunamadı.")
@@ -2097,11 +2171,11 @@ def adjust_stock(
         "STOCK_ADJUSTMENT",
         f"{dealer.name}: {product.name} / {batch.batch_code} lotunu {previous_quantity} miktarından {payload.target_quantity} miktarına düzeltti. Neden: {reason}",
     )
-    db.commit()
-    return {
+    result = {
         "product_id": product.id,
         "batch_id": batch.id,
         "batch_code": batch.batch_code,
         "previous_quantity": previous_quantity,
         "quantity_on_hand": batch.quantity_on_hand,
     }
+    return commit_stock_operation(db, admin, idempotency_key, payload, result)

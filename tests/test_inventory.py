@@ -82,6 +82,104 @@ def test_expired_batches_are_not_used_for_stock_out(client):
     assert response.json()["detail"].endswith("mevcut: 0.")
 
 
+def test_idempotent_stock_inbound_replays_without_duplicate_movement(client):
+    product_id = create_product(client)
+    dealer_id = default_dealer_id(client)
+    payload = {
+        "product_id": product_id,
+        "dealer_id": dealer_id,
+        "batch_code": "LOT-IDEMPOTENT-IN",
+        "expiry_date": (date.today() + timedelta(days=60)).isoformat(),
+        "quantity": 4,
+    }
+    headers = {"Idempotency-Key": "offline-inbound-001"}
+
+    first = client.post("/api/stock/inbound", json=payload, headers=headers)
+    replay = client.post("/api/stock/inbound", json=payload, headers=headers)
+
+    assert first.status_code == 201
+    assert replay.status_code == 201
+    assert replay.json() == first.json()
+    assert client.get("/api/batches").json()[0]["quantity_on_hand"] == 4
+    assert len(client.get("/api/movements?limit=100").json()) == 1
+
+
+def test_idempotency_key_cannot_be_reused_for_another_payload(client):
+    product_id = create_product(client)
+    dealer_id = default_dealer_id(client)
+    headers = {"Idempotency-Key": "offline-inbound-002"}
+    original = {
+        "product_id": product_id,
+        "dealer_id": dealer_id,
+        "batch_code": "LOT-IDEMPOTENT-KEY",
+        "expiry_date": (date.today() + timedelta(days=60)).isoformat(),
+        "quantity": 4,
+    }
+    changed = dict(original, quantity=5)
+
+    assert client.post("/api/stock/inbound", json=original, headers=headers).status_code == 201
+    conflict = client.post("/api/stock/inbound", json=changed, headers=headers)
+
+    assert conflict.status_code == 409
+    assert client.get("/api/batches").json()[0]["quantity_on_hand"] == 4
+
+
+def test_idempotent_stock_out_replays_without_double_decrement(client):
+    product_id = create_product(client)
+    dealer_id = default_dealer_id(client)
+    client.post(
+        "/api/stock/inbound",
+        json={
+            "product_id": product_id,
+            "dealer_id": dealer_id,
+            "batch_code": "LOT-IDEMPOTENT-OUT",
+            "expiry_date": (date.today() + timedelta(days=60)).isoformat(),
+            "quantity": 7,
+        },
+    )
+    payload = {"product_id": product_id, "dealer_id": dealer_id, "quantity": 3}
+    headers = {"Idempotency-Key": "offline-outbound-001"}
+
+    first = client.post("/api/stock/outbound", json=payload, headers=headers)
+    replay = client.post("/api/stock/outbound", json=payload, headers=headers)
+
+    assert first.status_code == replay.status_code == 200
+    assert replay.json() == first.json()
+    assert client.get("/api/batches").json()[0]["quantity_on_hand"] == 4
+    assert len(client.get("/api/movements?limit=100").json()) == 2
+
+
+def test_idempotent_stock_adjustment_replays_without_reapplying(client):
+    product_id = create_product(client)
+    dealer_id = default_dealer_id(client)
+    client.post(
+        "/api/stock/inbound",
+        json={
+            "product_id": product_id,
+            "dealer_id": dealer_id,
+            "batch_code": "LOT-IDEMPOTENT-ADJUST",
+            "expiry_date": (date.today() + timedelta(days=60)).isoformat(),
+            "quantity": 7,
+        },
+    )
+    payload = {
+        "product_id": product_id,
+        "dealer_id": dealer_id,
+        "batch_code": "LOT-IDEMPOTENT-ADJUST",
+        "target_quantity": 5,
+        "reason": "Fiziksel sayım",
+    }
+    headers = {"Idempotency-Key": "offline-adjustment-001"}
+
+    first = client.post("/api/stock/adjustment", json=payload, headers=headers)
+    replay = client.post("/api/stock/adjustment", json=payload, headers=headers)
+
+    assert first.status_code == replay.status_code == 200
+    assert replay.json() == first.json()
+    assert client.get("/api/batches").json()[0]["quantity_on_hand"] == 5
+    assert len(client.get("/api/movements?limit=100").json()) == 2
+
+
 def test_product_update_preserves_stock_and_updates_catalog_fields(client):
     product_id = create_product(client)
     dealer_id = default_dealer_id(client)

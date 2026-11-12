@@ -15,6 +15,7 @@ Bu klasör, bilgisayarınızda çalışan ilk stok ve son kullanma tarihi takip 
 - Yönetici ve kullanıcı hesapları, bayi erişimi ve işlem geçmişi
 - Yönetici panelinde paket, abonelik, KDV ve tahsilat takibi
 - Raporlarda yerel stok uyarıları ve isteğe bağlı OpenAI talep / transfer önerileri
+- Bu cihazda şifreli çevrimdışı stok giriş/çıkış/düzeltme sırası ve güvenli eşitleme
 - FIFO, yetersiz stok ve SKT geçmiş lotlar için otomatik testler
 
 Kamera barkod okuyucu ilk kullanımda `html5-qrcode` kitaplığını jsDelivr üzerinden yükler; görüntü işleme tarayıcıda yapılır ve barkod numarası ürün formuna aktarılır. Kamera izni için site HTTPS ile açılmalıdır. iPhone'da yerel `http://192.168...` adresi kamerayı açamaz; uygulama HTTPS alan adına yayımlandığında çalışır.
@@ -143,11 +144,24 @@ Yedek anahtarını kaybederseniz dosyalar açılamaz. Düzenli olarak ayrı bir 
 
 ## Docker ile yerel çalıştırma
 
-Docker Desktop kurulu olmalıdır. `.env.example` dosyasını `.env` olarak kopyalayıp `POSTGRES_DB`, `POSTGRES_USER`, güçlü `POSTGRES_PASSWORD`, `SAVESTOCK_SECRET_KEY` ve `BACKUP_ENCRYPTION_KEY` değerlerini ayarlayın. Compose yerel olarak PostgreSQL 15 kullanır; harici veritabanlarında `pg_dump`/`pg_restore` istemci sürümünü sunucuyla uyumlu tutun. Compose parolayı bağlantı URL'sinde kullandığından yerel örnekte özel URI karakterleri içermeyen rastgele bir hex parola tercih edin; üretim sırlarını repoya koymayın. Compose uygulamayı yalnızca `127.0.0.1` arayüzüne açar:
+Docker Desktop kurulu olmalıdır. `.env.example` dosyasını `.env` olarak kopyalayıp `POSTGRES_DB`, `POSTGRES_USER`, güçlü `POSTGRES_PASSWORD`, `SAVESTOCK_SECRET_KEY` ve `BACKUP_ENCRYPTION_KEY` değerlerini ayarlayın. Compose yerel olarak PostgreSQL 15 kullanır; harici veritabanlarında `pg_dump`/`pg_restore` istemci sürümünü sunucuyla uyumlu tutun. Compose parolayı bağlantı URL'sinde kullandığından yerel örnekte özel URI karakterleri içermeyen rastgele bir hex parola tercih edin; üretim sırlarını repoya koymayın. Varsayılan kurulum Caddy'yi başlatmaz ve uygulamayı yalnızca `127.0.0.1` arayüzüne açar:
 
     docker compose up --build -d
 
-Sağlık durumunu `docker compose ps` ile izleyin. Günlükleri `docker compose logs -f app` ile görüntüleyin; kapatmak için `docker compose down` kullanın. Kalıcı PostgreSQL volume'u silinmediği sürece veritabanını korur. `docker compose down -v` veritabanı volume'unu siler; yedek ve açık onay olmadan çalıştırmayın. Dış erişim için TLS sonlandıran bir reverse proxy kurup erişimi yalnızca proxy'den gelen trafiğe sınırlandırın; `SAVESTOCK_ENV=production`, Secure cookie, geçerli allowed host listesi ve üretim sırları zorunludur.
+Sağlık durumunu `docker compose ps` ile izleyin. Günlükleri `docker compose logs -f app` ile görüntüleyin; kapatmak için `docker compose down` kullanın. Kalıcı PostgreSQL volume'u silinmediği sürece veritabanını korur. `docker compose down -v` veritabanı volume'unu siler; yedek ve açık onay olmadan çalıştırmayın.
+
+### Caddy ile herkese açık HTTPS
+
+Bu profili, Docker Compose sunucunuzda kullanmak için:
+
+1. `.env` dosyasındaki `SAVESTOCK_DOMAIN` değerini alan adınızla değiştirin. Alan adının DNS A/AAAA kayıtları sunucunun herkese açık adresini göstermeli; sunucunun güvenlik duvarı ve sağlayıcı ağı TCP 80/443 (isteğe bağlı HTTP/3 için UDP 443) trafiğine izin vermelidir. Bu portları başka bir web sunucusu kullanıyorsa önce mevcut proxy yapılandırmasına uyarlayın.
+2. `SAVESTOCK_ENV=production`, `SAVESTOCK_COOKIE_SECURE=true` ve `SAVESTOCK_ALLOWED_HOSTS` değerlerini ayarlayın. İzin verilen ana makine listesine `SAVESTOCK_DOMAIN` ile aynı host adını yazın. `SAVESTOCK_SECRET_KEY` ve `BACKUP_ENCRYPTION_KEY` için benzersiz üretim sırları kullanın.
+3. `SAVESTOCK_PROXY_SUBNET` ve `SAVESTOCK_PROXY_IP` değerlerinin sunucudaki diğer Docker ağlarıyla çakışmadığını doğrulayın. Proxy IP'sini değiştirirseniz `FORWARDED_ALLOW_IPS` içindeki IP'yi de eşleştirin.
+4. Sunucuda çalıştırın:
+
+       docker compose --profile https up --build -d
+
+Caddy, sertifikayı otomatik alır ve yeniler; `/data` ve `/config` volume'ları sertifika durumunu korur. Caddy HTTPS'i sonlandırır; uygulama container'ı yalnızca sunucunun yerel arayüzünde ve özel Docker ağında erişilebilir kalır. DNS henüz yayılmadıysa veya 80/443 erişilemiyorsa sertifika alınamaz; `docker compose logs -f caddy` ile durumu kontrol edin. iPhone'da uygulamayı `https://<SAVESTOCK_DOMAIN>` adresinden açın; kamera izni için tarayıcıya izin verin.
 
 Compose ortamında yedekleme komutlarını container içinden çalıştırın; çıktı, host'taki `backups/` klasörüne yazılır:
 
@@ -155,6 +169,14 @@ Compose ortamında yedekleme komutlarını container içinden çalıştırın; �
     docker compose exec app python -m app.backup verify /backups/savestock-<tarih>.dump.enc
 
 Geri yükleme için aynı `restore ... --confirm` komutu kullanılabilir; bu işlem mevcut PostgreSQL verisini değiştirir.
+
+## Çevrimdışı stok işlemleri
+
+Uygulamayı HTTPS adresinden açıp yükledikten sonra **Profilim > Çevrimdışı erişim** bölümünde en az 8 karakterli ayrı bir çevrimdışı PIN belirleyin. Son ürün, kategori, bayi ve lot görüntüsü ile bekleyen stok işlemleri tarayıcının IndexedDB alanında PBKDF2/AES-GCM ile şifrelenir. PIN sunucuya gönderilmez ve unutulursa bu cihazdaki kayıtlı çevrimdışı işlemler kurtarılamaz.
+
+Çevrimdışı iken stok girişi, FIFO stok çıkışı ve yönetici stok düzeltmesi sıraya alınabilir. Ürün/lot ekleme, stok talepleri, transfer, kullanıcı ve abonelik işlemleri çevrimdışı desteklenmez. Çevrimdışı ekran, en son indirilen görüntüyü kullanır; stok çıkışı eldeki lot/SKT verisine göre yerelde kontrol edilir, fakat sunucuya eşitlenirken yetki, lot ve güncel stok yeniden doğrulanır. Bu nedenle eşitleme sırasında stok veya izin çakışması oluşabilir. Çakışan işlem ve sonrakiler otomatik gönderilmez; mevcut sürümde eşitleme kuyruğunu gözden geçirip açık onayla silerek gerekli işlemi yeniden girmek gerekir.
+
+Her stok işlemi sabit bir `Idempotency-Key` ile gönderilir. Sunucu aynı anahtarla tekrar ulaşan isteği ikinci kez uygulamaz; böylece bağlantı yanıtı kaybolsa bile yeniden deneme mükerrer stok hareketi oluşturmaz. Eşitleme için cihazdaki kasanın PIN ile açılmış olması ve aynı SaveStock hesabıyla giriş yapılması gerekir. Bekleyen işlem varken çıkış, silme onayı ister; çevrimdışı durumdayken sunucu oturumu güvenle kapatılamadığından çıkış bağlantı gelene kadar devre dışıdır. PIN'i hatırlamıyorsanız kuyruğu eşitlemeden kasayı silmek bekleyen işlemleri kalıcı olarak kaybettirir.
 
 ## Sağlık, günlük ve bağlantı havuzu
 

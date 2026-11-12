@@ -34,16 +34,44 @@ services:
       DB_POOL_SIZE: ${DB_POOL_SIZE:-5}
       DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-10}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1}
+      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1,172.29.0.2}
     ports:
       - "127.0.0.1:${SAVESTOCK_PORT:-8000}:8000"
     volumes:
       - ./backups:/backups
-    networks: [internal]
+    networks: [internal, proxy]
+
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["https"]
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      SAVESTOCK_DOMAIN: ${SAVESTOCK_DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      proxy:
+        ipv4_address: ${SAVESTOCK_PROXY_IP:-172.29.0.2}
 
 volumes:
   postgres_data:
+  caddy_data:
+  caddy_config:
 
 networks:
   internal:
     driver: bridge
+  proxy:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: ${SAVESTOCK_PROXY_SUBNET:-172.29.0.0/24}

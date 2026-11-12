@@ -62,6 +62,11 @@ let billingData = null;
 let selectedBillingPlan = "starter";
 let selectedBillingTerm = 1;
 let currentUser = null;
+let offlineMode = false;
+let pendingOnlineUser = null;
+let offlineSyncPromise = null;
+let offlineState = null;
+let offlineBannerNotice = null;
 let selectedDealerId = null;
 let currentPage = null;
 const previousPages = [];
@@ -221,6 +226,7 @@ async function api(path, options) {
       ? data.detail.map(function (item) { return item.msg || "Geçersiz değer."; }).join(" ")
       : (data.detail || "İşlem tamamlanamadı.");
     const error = new Error(detail);
+    error.status = response.status;
     error.fieldErrors = Array.isArray(data.detail) ? data.detail.reduce(function (result, item) {
       const field = item.loc && item.loc[item.loc.length - 1];
       if (field && field !== "body") result[field] = item.msg || "Geçersiz değer.";
@@ -229,6 +235,161 @@ async function api(path, options) {
     throw error;
   }
   return data;
+}
+
+function isNetworkError(error) {
+  return !navigator.onLine || error instanceof TypeError;
+}
+
+function offlineSnapshot() {
+  return {
+    categories: categories,
+    dealers: dealers,
+    products: productCatalog,
+    batches: batches
+  };
+}
+
+function setOfflineAuthMessage(message) {
+  document.getElementById("offline-unlock-description").textContent = message;
+}
+
+async function continueOnlineAuth(user) {
+  if (await window.SaveStockOfflineStore.hasVault() && !window.SaveStockOfflineStore.isUnlocked()) {
+    pendingOnlineUser = user;
+    setAuthPanel("offline-unlock-panel");
+    setOfflineAuthMessage("Hesabınız doğrulandı. Bu cihazdaki bekleyen işlemleri güvenli biçimde açmak için çevrimdışı PIN'inizi girin.");
+    return;
+  }
+  if (window.SaveStockOfflineStore.isUnlocked()) {
+    const saved = window.SaveStockOfflineStore.state();
+    if (saved && String(saved.user.id) !== String(user.id)) {
+      if (saved.queue.length) {
+        pendingOnlineUser = null;
+        setAuthPanel("login-panel");
+        showAuthMessage("Bu cihazdaki bekleyen işlemler başka bir hesaba ait. Bu işlemleri eşitlemek için önce kasa sahibi hesapla giriş yapın.");
+        return;
+      }
+      await window.SaveStockOfflineStore.clear();
+      offlineState = null;
+    }
+  }
+  pendingOnlineUser = null;
+  enterApp(user);
+}
+
+async function enterOfflineApp(state) {
+  if (!state || !state.user || !state.cache) throw new Error("Çevrimdışı kayıtlar eksik.");
+  offlineMode = true;
+  offlineState = state;
+  updateUserIdentity(state.user);
+  categories = state.cache.categories || [];
+  dealers = state.cache.dealers || [];
+  productCatalog = state.cache.products || [];
+  batches = state.cache.batches || [];
+  movements = [];
+  overviewMovements = [];
+  users = [];
+  stockRequests = [];
+  billingData = null;
+  dealerOverview = {dealers: [], stocks: [], expiring: []};
+  document.getElementById("auth-screen").hidden = true;
+  document.getElementById("app-shell").hidden = false;
+  document.getElementById("data-load-error").hidden = true;
+  document.querySelectorAll("[data-admin-only]").forEach(function (element) {
+    element.hidden = state.user.role !== "admin";
+  });
+  updateDealerSelects();
+  updateCategorySelects();
+  updateProductSelects();
+  applyOfflineProjection(state.queue);
+  setPage("overview");
+  renderAll();
+  updateOfflineBanner();
+  await renderOfflineSettings();
+}
+
+async function openOfflineUnlock() {
+  pendingOnlineUser = null;
+  setAuthPanel("offline-unlock-panel");
+  setOfflineAuthMessage("Bu cihazdaki stok verileri şifreli. Çevrimdışı PIN'inizi girin.");
+}
+
+async function renderOfflineSettings() {
+  const configured = await window.SaveStockOfflineStore.hasVault();
+  const form = document.getElementById("offline-pin-form");
+  const clearButton = document.getElementById("offline-clear-button");
+  const status = document.getElementById("offline-settings-status");
+  if (offlineMode) {
+    form.hidden = true;
+    clearButton.hidden = true;
+    status.textContent = "Çevrimdışı kullanım açık. Veriler ve bekleyen işlemler bu cihazda şifreli saklanır.";
+  } else if (configured && window.SaveStockOfflineStore.isUnlocked()) {
+    form.hidden = true;
+    clearButton.hidden = false;
+    status.textContent = "Bu cihaz için çevrimdışı erişim etkin. En son sunucudan alınan veriler korunuyor.";
+  } else if (configured) {
+    form.hidden = true;
+    clearButton.hidden = true;
+    status.textContent = "Bu cihaz için çevrimdışı erişim ayarlı. Sonraki açılışta PIN istenir.";
+  } else {
+    form.hidden = false;
+    clearButton.hidden = true;
+    status.textContent = "Çevrimdışı erişim henüz etkin değil.";
+  }
+}
+
+function updateOfflineBanner(message) {
+  const banner = document.getElementById("offline-sync-banner");
+  if (!banner) return;
+  if (message) offlineBannerNotice = message;
+  const state = window.SaveStockOfflineStore.isUnlocked() ? window.SaveStockOfflineStore.state() : offlineState;
+  const queue = state && Array.isArray(state.queue) ? state.queue : [];
+  const needsBanner = offlineMode || queue.length > 0;
+  banner.hidden = !needsBanner;
+  document.querySelectorAll(".side-nav [data-page]").forEach(function (item) {
+    const adminOnly = item.hasAttribute("data-admin-only") && (!currentUser || currentUser.role !== "admin");
+    const offlineRestricted = offlineMode && !["overview", "products", "product-insight", "movements", "movement-insight", "expiry", "expiry-insight"].includes(item.dataset.page);
+    item.hidden = adminOnly || offlineRestricted;
+  });
+  document.getElementById("profile-shortcut").hidden = offlineMode;
+  document.querySelectorAll("[data-page='product-add']").forEach(function (item) { item.hidden = offlineMode; });
+  if (!needsBanner) {
+    offlineBannerNotice = null;
+    document.getElementById("offline-sync-message").textContent = "";
+    return;
+  }
+
+  const conflicts = queue.filter(function (item) { return item.status === "conflict"; }).length;
+  document.getElementById("offline-sync-title").textContent = offlineMode ? "Çevrimdışı çalışma" : "Eşitleme bekliyor";
+  document.getElementById("offline-sync-message").textContent = offlineBannerNotice || (offlineMode
+    ? (queue.length ? "İşlemler bu cihazda şifreli olarak sırada. Bağlantı gelince eşitleyin." : "Son indirilen ürün ve lot verileri görüntüleniyor.")
+    : queue.length + " işlem sunucuya gönderilmeyi bekliyor.");
+  const list = document.getElementById("offline-queue-list");
+  list.replaceChildren();
+  queue.forEach(function (item) {
+    const line = document.createElement("li");
+    const type = {inbound: "Stok girişi", outbound: "Stok çıkışı", adjustment: "Stok düzeltmesi"}[item.kind] || "Stok işlemi";
+    const payload = item.payload || {};
+    const product = productCatalog.find(function (entry) { return Number(entry.id) === Number(payload.product_id); });
+    const dealer = dealers.find(function (entry) { return Number(entry.id) === Number(payload.dealer_id); });
+    const details = [product ? product.name : "Ürün #" + (payload.product_id || "?")];
+    if (dealer) details.push(dealer.name);
+    if (payload.batch_code) details.push("Lot " + payload.batch_code);
+    const quantity = item.kind === "adjustment" ? payload.target_quantity : payload.quantity;
+    if (quantity !== undefined && quantity !== null && quantity !== "") {
+      details.push((item.kind === "adjustment" ? "Sayım " : "Miktar ") +
+        Number(quantity).toLocaleString("tr-TR") + (product && product.unit ? " " + product.unit : ""));
+    }
+    line.textContent = type + " · " + details.join(" · ") + " · " +
+      (item.status === "conflict" ? "Çakışma: " + (item.error || "inceleme gerekli") : "eşitleme bekliyor");
+    list.appendChild(line);
+  });
+  const syncButton = document.getElementById("offline-sync-button");
+  syncButton.hidden = queue.length === 0 || !navigator.onLine || !window.SaveStockOfflineStore.isUnlocked() || !currentUser;
+  syncButton.disabled = conflicts > 0 || queue.some(function (item) { return item.status === "sending"; });
+  document.getElementById("offline-login-button").hidden = !(offlineMode && navigator.onLine && !currentUser);
+  document.getElementById("offline-discard-button").hidden = queue.length === 0 || !window.SaveStockOfflineStore.isUnlocked();
 }
 
 function setupInstallableApp() {
@@ -269,7 +430,7 @@ function setupInstallableApp() {
 function setAuthPanel(panelId) {
   document.getElementById("auth-screen").hidden = false;
   document.getElementById("app-shell").hidden = true;
-  ["login-panel", "setup-panel"].forEach(function (id) {
+  ["login-panel", "setup-panel", "offline-unlock-panel"].forEach(function (id) {
     document.getElementById(id).hidden = id !== panelId;
   });
   document.getElementById("auth-message").hidden = true;
@@ -286,6 +447,14 @@ function showAuthMessage(message) {
   const element = document.getElementById("auth-message");
   element.textContent = message;
   element.hidden = false;
+}
+
+function requireOnlineLogin(message) {
+  offlineMode = false;
+  currentUser = null;
+  pendingOnlineUser = null;
+  showLogin();
+  showAuthMessage(message);
 }
 
 function showDataLoadError(error) {
@@ -314,6 +483,7 @@ function updateUserIdentity(user) {
 }
 
 function enterApp(user) {
+  offlineMode = false;
   updateUserIdentity(user);
   currentPage = null;
   previousPages.length = 0;
@@ -322,7 +492,10 @@ function enterApp(user) {
   document.getElementById("auth-screen").hidden = true;
   document.getElementById("app-shell").hidden = false;
   setPage("overview");
-  refreshAll().catch(function (error) {
+  refreshAll().then(function () {
+    const state = window.SaveStockOfflineStore.isUnlocked() ? window.SaveStockOfflineStore.state() : null;
+    if (state && state.queue.length && navigator.onLine) syncOfflineTransactions();
+  }).catch(function (error) {
     showDataLoadError(error);
     showToast("Veriler yüklenemedi. " + error.message, true);
   });
@@ -332,13 +505,23 @@ async function initializeAuth() {
   try {
     const status = await api("/api/auth/status");
     if (status.authenticated) {
-      await enterApp(status.user);
+      await continueOnlineAuth(status.user);
     } else if (!status.initialized) {
       setAuthPanel("setup-panel");
     } else {
       showLogin();
     }
   } catch (error) {
+    try {
+      if (isNetworkError(error) && await window.SaveStockOfflineStore.hasVault()) {
+        await openOfflineUnlock();
+        return;
+      }
+    } catch (storageError) {
+      showLogin();
+      showAuthMessage("Çevrimdışı kasa okunamadı: " + storageError.message);
+      return;
+    }
     showLogin();
     showAuthMessage("Sunucuya bağlanılamadı. Uygulama sunucusunun çalıştığını kontrol edin.");
   }
@@ -352,7 +535,7 @@ function wireAuthEvents() {
     try {
       const result = await api("/api/auth/login", {method: "POST", body: JSON.stringify(payload)});
       form.reset();
-      await enterApp(result.user);
+      await continueOnlineAuth(result.user);
     } catch (error) { showAuthMessage(error.message); }
   });
   document.getElementById("setup-form").addEventListener("submit", async function (event) {
@@ -364,12 +547,63 @@ function wireAuthEvents() {
     try {
       const result = await api("/api/auth/setup", {method: "POST", body: JSON.stringify(payload)});
       form.reset();
-      await enterApp(result.user);
+      await continueOnlineAuth(result.user);
     } catch (error) { showAuthMessage(error.message); }
   });
+  document.getElementById("offline-unlock-form").addEventListener("submit", async function (event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const pin = new FormData(form).get("pin");
+    const button = form.querySelector('[type="submit"]');
+    button.disabled = true;
+    const originalText = button.textContent;
+    button.textContent = "Kasa açılıyor…";
+    try {
+      const state = await window.SaveStockOfflineStore.unlock(pin);
+      form.reset();
+      if (pendingOnlineUser) {
+        const user = pendingOnlineUser;
+        if (String(state.user.id) !== String(user.id)) {
+          if (state.queue.length) {
+            window.SaveStockOfflineStore.lock();
+            pendingOnlineUser = null;
+            setAuthPanel("login-panel");
+            showAuthMessage("Çevrimdışı kasada başka bir hesaba ait bekleyen işlemler var. Önce o hesapla giriş yapın.");
+            return;
+          }
+          await window.SaveStockOfflineStore.clear();
+          offlineState = null;
+        }
+        pendingOnlineUser = null;
+        enterApp(user);
+      } else {
+        await enterOfflineApp(state);
+      }
+    } catch (error) {
+      showAuthMessage(error.message);
+    } finally {
+      button.disabled = false;
+      button.textContent = originalText;
+    }
+  });
   document.getElementById("logout-button").addEventListener("click", async function () {
+    if (!navigator.onLine) {
+      showToast("Çevrimdışı durumda güvenli çıkış yapılamaz. Bağlantı gelince tekrar deneyin.", true);
+      return;
+    }
+    const state = window.SaveStockOfflineStore.isUnlocked() ? window.SaveStockOfflineStore.state() : null;
+    if (state && state.queue.length && !window.confirm(
+      state.queue.length + " işlem henüz eşitlenmedi. Çıkış yaparsanız bu cihazdaki çevrimdışı veriler ve bekleyen işlemler silinir. Devam edilsin mi?"
+    )) return;
     try { await api("/api/auth/logout", {method: "POST", body: "{}"}); }
-    catch (error) { showToast(error.message, true); }
+    catch (error) {
+      if (error.status !== 401) { showToast(error.message, true); return; }
+    }
+    try { await window.SaveStockOfflineStore.clear(); }
+    catch (error) { showToast(error.message, true); return; }
+    offlineState = null;
+    offlineMode = false;
+    offlineBannerNotice = null;
     currentUser = null;
     showLogin();
   });
@@ -510,6 +744,10 @@ function closeNotificationPanel(restoreFocus) {
 }
 function setPage(page, options) {
   if (!PAGE_INFO[page]) return;
+  if (offlineMode && !["overview", "products", "product-insight", "movements", "movement-insight", "expiry", "expiry-insight"].includes(page)) {
+    showToast("Çevrimdışı modda yalnızca önbellekteki stok ekranları kullanılabilir.", true);
+    return;
+  }
   if (["users", "user-insight", "dealers", "dealer-insight"].includes(page) && (!currentUser || currentUser.role !== "admin")) {
     showToast("Bu ekran için yönetici yetkisi gerekiyor.", true);
     return;
@@ -665,6 +903,7 @@ function renderProducts() {
           '<div><button type="button" data-product-stock="inbound" data-product-id="' + Number(product.id) + '">Stok girişi</button>' +
           '<button type="button" data-product-stock="outbound" data-product-id="' + Number(product.id) + '">Stok çıkışı</button></div></details>' +
           (currentUser && currentUser.role === "admin"
+            && !offlineMode
             ? '<button class="button button-quiet product-edit-button" type="button" data-edit-product="' + Number(product.id) + '" aria-label="' + escapeHtml(product.name) + ' ürününü düzenle">Düzenle</button>'
             : "") + "</td></tr>";
     }).join("");
@@ -2086,12 +2325,18 @@ async function refreshAll() {
   overviewMovements = overviewDealer
     ? await api("/api/movements?limit=100&dealer_id=" + overviewDealer.id)
     : null;
+  if (window.SaveStockOfflineStore.isUnlocked() && currentUser) {
+    await window.SaveStockOfflineStore.updateSnapshot(currentUser, offlineSnapshot());
+    offlineState = window.SaveStockOfflineStore.state();
+    if (offlineState) applyOfflineProjection(offlineState.queue);
+  }
   updateDealerSelects();
   updateCategorySelects(); updateProductSelects(); renderAll();
   const accountLoads = [loadProfile(), loadStockRequests()];
   if (currentUser && currentUser.role === "admin") accountLoads.push(loadUsers(), loadAdminActivities());
   accountLoads.push(loadBilling());
   await Promise.all(accountLoads);
+  await renderOfflineSettings();
   document.getElementById("data-load-error").hidden = true;
 }
 function formObject(form) {
@@ -2102,6 +2347,272 @@ function formObject(form) {
   if (data.note === "") data.note = null;
   return data;
 }
+
+const STOCK_OPERATION_ROUTES = {
+  inbound: "/api/stock/inbound",
+  outbound: "/api/stock/outbound",
+  adjustment: "/api/stock/adjustment"
+};
+
+function applyOfflineOperation(operation) {
+  const payload = operation.payload;
+  const product = productCatalog.find(function (item) { return Number(item.id) === Number(payload.product_id); });
+  const dealer = dealers.find(function (item) { return Number(item.id) === Number(payload.dealer_id); });
+  if (!product || !dealer) throw new Error("Ürün veya bayi önbellekte bulunamadı.");
+
+  if (operation.kind === "inbound") {
+    const batch = batches.find(function (item) {
+      return Number(item.product_id) === Number(payload.product_id) &&
+        Number(item.dealer_id) === Number(payload.dealer_id) && item.batch_code === payload.batch_code;
+    });
+    if (batch && batch.expiry_date !== payload.expiry_date) {
+      throw new Error("Aynı lot kodu farklı bir SKT ile kayıtlı.");
+    }
+    if (batch) {
+      batch.quantity_on_hand = Number(batch.quantity_on_hand || 0) + payload.quantity;
+    } else {
+      batches.push({
+        id: -Date.now() - Math.floor(Math.random() * 1000),
+        product_id: product.id,
+        product_name: product.name,
+        sku: product.sku,
+        unit: product.unit,
+        dealer_id: dealer.id,
+        dealer_name: dealer.name,
+        batch_code: payload.batch_code,
+        expiry_date: payload.expiry_date,
+        quantity_on_hand: payload.quantity
+      });
+    }
+  } else if (operation.kind === "outbound") {
+    const today = localDateKey(new Date());
+    const eligible = batches.filter(function (item) {
+      return Number(item.product_id) === Number(payload.product_id) &&
+        Number(item.dealer_id) === Number(payload.dealer_id) &&
+        Number(item.quantity_on_hand) > 0 && item.expiry_date >= today;
+    }).sort(function (a, b) {
+      return a.expiry_date.localeCompare(b.expiry_date) || Number(a.id) - Number(b.id);
+    });
+    const available = eligible.reduce(function (sum, item) { return sum + Number(item.quantity_on_hand); }, 0);
+    if (available < payload.quantity) {
+      throw new Error("Önbelleğe göre yeterli kullanılabilir stok yok. Güncel stok için bağlantı kurun.");
+    }
+    let remaining = payload.quantity;
+    eligible.forEach(function (item) {
+      if (!remaining) return;
+      const taken = Math.min(Number(item.quantity_on_hand), remaining);
+      item.quantity_on_hand -= taken;
+      remaining -= taken;
+    });
+  } else if (operation.kind === "adjustment") {
+    if (!currentUser || currentUser.role !== "admin") throw new Error("Stok düzeltmesi için yönetici yetkisi gerekir.");
+    const batch = batches.find(function (item) {
+      return Number(item.product_id) === Number(payload.product_id) &&
+        Number(item.dealer_id) === Number(payload.dealer_id) && item.batch_code === payload.batch_code;
+    });
+    if (!batch) throw new Error("Düzeltilecek lot önbellekte bulunamadı.");
+    if (Number(batch.quantity_on_hand) === payload.target_quantity) throw new Error("Sayım miktarı mevcut miktarla aynı.");
+    batch.quantity_on_hand = payload.target_quantity;
+  }
+
+  productCatalog.forEach(function (item) {
+    item.total_quantity = batches.reduce(function (sum, batch) {
+      return sum + (Number(batch.product_id) === Number(item.id) ? Number(batch.quantity_on_hand || 0) : 0);
+    }, 0);
+  });
+}
+
+function applyOfflineProjection(queue) {
+  if (!offlineState || !offlineState.cache) return;
+  categories = JSON.parse(JSON.stringify(offlineState.cache.categories || []));
+  dealers = JSON.parse(JSON.stringify(offlineState.cache.dealers || []));
+  productCatalog = JSON.parse(JSON.stringify(offlineState.cache.products || []));
+  batches = JSON.parse(JSON.stringify(offlineState.cache.batches || []));
+  let blocked = false;
+  queue.forEach(function (operation) {
+    if (blocked) return;
+    if (operation.status === "conflict") { blocked = true; return; }
+    try {
+      applyOfflineOperation(operation);
+    } catch (error) {
+      operation.status = "conflict";
+      operation.error = error.message;
+      blocked = true;
+      window.SaveStockOfflineStore.updateOperation(operation.id, {
+        status: "conflict",
+        error: operation.error
+      }).catch(function (saveError) { showToast(saveError.message, true); });
+    }
+  });
+}
+
+function newStockOperationId() {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 15) | 64;
+  bytes[8] = (bytes[8] & 63) | 128;
+  const hex = Array.from(bytes, function (value) { return value.toString(16).padStart(2, "0"); }).join("");
+  return hex.slice(0, 8) + "-" + hex.slice(8, 12) + "-" + hex.slice(12, 16) + "-" +
+    hex.slice(16, 20) + "-" + hex.slice(20);
+}
+
+async function enqueueOfflineOperation(operation) {
+  if (!window.SaveStockOfflineStore.isUnlocked()) {
+    throw new Error("Önce Profilim bölümünden çevrimdışı PIN ayarlayın.");
+  }
+  const previousProducts = JSON.stringify(productCatalog);
+  const previousBatches = JSON.stringify(batches);
+  try {
+    applyOfflineOperation(operation);
+    operation.status = "pending";
+    await window.SaveStockOfflineStore.addOperation(operation);
+    offlineState = window.SaveStockOfflineStore.state();
+    offlineMode = true;
+    offlineBannerNotice = null;
+    renderAll();
+    updateOfflineBanner();
+  } catch (error) {
+    productCatalog = JSON.parse(previousProducts);
+    batches = JSON.parse(previousBatches);
+    throw error;
+  }
+}
+
+async function submitStockOperation(kind, form) {
+  const payload = formObject(form);
+  const requestId = newStockOperationId();
+  const operation = {
+    id: requestId,
+    kind: kind,
+    payload: payload,
+    status: "sending",
+    createdAt: new Date().toISOString()
+  };
+  if (offlineMode || !navigator.onLine) {
+    await enqueueOfflineOperation(operation);
+    return {queued: true};
+  }
+
+  const canPersist = window.SaveStockOfflineStore.isUnlocked();
+  if (canPersist) {
+    await window.SaveStockOfflineStore.addOperation(operation);
+    offlineState = window.SaveStockOfflineStore.state();
+    updateOfflineBanner();
+  }
+  try {
+    const result = await api(STOCK_OPERATION_ROUTES[kind], {
+      method: "POST",
+      headers: {"Content-Type": "application/json", "Idempotency-Key": requestId},
+      body: JSON.stringify(payload)
+    });
+    if (canPersist) {
+      await window.SaveStockOfflineStore.removeOperation(requestId);
+      offlineState = window.SaveStockOfflineStore.state();
+    }
+    updateOfflineBanner();
+    return {result: result};
+  } catch (error) {
+    if (canPersist && (isNetworkError(error) || error.status === 401 || error.status >= 500)) {
+      await window.SaveStockOfflineStore.updateOperation(requestId, {
+        status: "pending",
+        error: error.message
+      });
+      offlineState = window.SaveStockOfflineStore.state();
+      if (error.status === 401) {
+        requireOnlineLogin("Oturum süreniz doldu. Bekleyen stok işlemleri bu cihazda korundu; aynı hesapla giriş yaptığınızda eşitleme yeniden denenecek.");
+      }
+      if (isNetworkError(error)) {
+        offlineMode = true;
+        applyOfflineProjection(offlineState.queue);
+        renderAll();
+      }
+      updateOfflineBanner(error.status === 401 ? "Giriş süreniz dolmuş olabilir. Yeniden giriş yaptıktan sonra aynı işlem anahtarıyla güvenle eşitlenir." : undefined);
+      return {queued: true};
+    }
+    if (canPersist) {
+      await window.SaveStockOfflineStore.removeOperation(requestId);
+      offlineState = window.SaveStockOfflineStore.state();
+      updateOfflineBanner();
+    }
+    if (isNetworkError(error)) {
+      throw new Error("Sunucu yanıt vermedi ve çevrimdışı kasa açık değil. İşlem sunucuya ulaşmış olabilir; tekrar denemeden önce hareketleri kontrol edin. Güvenli çevrimdışı sıra için önce PIN ayarlayın.");
+    }
+    throw error;
+  }
+}
+
+async function syncOfflineTransactions() {
+  if (offlineSyncPromise) return offlineSyncPromise;
+  offlineSyncPromise = (async function () {
+    if (!navigator.onLine) {
+      updateOfflineBanner("İnternet bağlantısı yok. İşlemler bu cihazda korunuyor.");
+      return;
+    }
+    if (!window.SaveStockOfflineStore.isUnlocked()) {
+      updateOfflineBanner("Eşitlemeden önce çevrimdışı PIN ile kasanın kilidini açın.");
+      return;
+    }
+    const stored = window.SaveStockOfflineStore.state();
+    if (!currentUser || String(stored.user.id) !== String(currentUser.id)) {
+      document.getElementById("offline-login-button").hidden = false;
+      updateOfflineBanner("Eşitlemek için çevrimdışı kasaya bağlı hesapla giriş yapın.");
+      return;
+    }
+
+    let succeeded = 0;
+    let requiresLogin = false;
+    for (const operation of stored.queue) {
+      if (operation.status === "conflict") break;
+      try {
+        await window.SaveStockOfflineStore.updateOperation(operation.id, {status: "sending", error: ""});
+        await api(STOCK_OPERATION_ROUTES[operation.kind], {
+          method: "POST",
+          headers: {"Content-Type": "application/json", "Idempotency-Key": operation.id},
+          body: JSON.stringify(operation.payload)
+        });
+        await window.SaveStockOfflineStore.removeOperation(operation.id);
+        succeeded += 1;
+      } catch (error) {
+        if (error.status === 409 || error.status === 422 || error.status === 403 || error.status === 404) {
+          await window.SaveStockOfflineStore.updateOperation(operation.id, {
+            status: "conflict",
+            error: error.message
+          });
+        } else {
+          await window.SaveStockOfflineStore.updateOperation(operation.id, {
+            status: "pending",
+            error: error.message
+          });
+          requiresLogin = error.status === 401;
+        }
+        break;
+      }
+    }
+    offlineState = window.SaveStockOfflineStore.state();
+    if (!offlineState.queue.length) {
+      offlineMode = false;
+      offlineBannerNotice = null;
+      await refreshAll();
+      showToast(succeeded ? succeeded + " çevrimdışı işlem güvenle eşitlendi." : "Bekleyen işlem yok.");
+    } else {
+      applyOfflineProjection(offlineState.queue);
+      renderAll();
+      updateOfflineBanner(offlineState.queue.some(function (item) { return item.status === "conflict"; })
+        ? "Bir işlem stok/izin doğrulamasında çakıştı. Bu işlem ve sonrakiler, gözden geçirilene kadar gönderilmez."
+        : "Eşitleme tamamlanmadı. Bekleyen işlemler aynı işlem anahtarıyla güvenle yeniden denenebilir.");
+      if (requiresLogin) {
+        requireOnlineLogin("Oturum süreniz doldu. Bekleyen stok işlemleri bu cihazda korundu; aynı hesapla giriş yaptığınızda eşitleme yeniden denenecek.");
+      }
+    }
+  })().catch(function (error) {
+    updateOfflineBanner(error.message);
+  }).finally(function () {
+    offlineSyncPromise = null;
+    updateOfflineBanner();
+  });
+  return offlineSyncPromise;
+}
+
 function exportCsv(filename, headers, rows) {
   const quote = function (value) { return '"' + String(value == null ? "" : value).replace(/"/g, '""') + '"'; };
   const csv = "\uFEFF" + [headers, ...rows].map(function (row) { return row.map(quote).join(";"); }).join("\r\n");
@@ -2124,6 +2635,83 @@ function wireEvents() {
     document.getElementById("data-load-error-message").textContent = "Sunucudan güncel veriler alınıyor…";
     try { await refreshAll(); }
     catch (error) { showDataLoadError(error); }
+  });
+  document.getElementById("offline-sync-button").addEventListener("click", syncOfflineTransactions);
+  document.getElementById("offline-login-button").addEventListener("click", function () {
+    pendingOnlineUser = null;
+    showLogin();
+  });
+  document.getElementById("offline-discard-button").addEventListener("click", async function () {
+    const state = window.SaveStockOfflineStore.state();
+    if (!state || !state.queue.length) return;
+    if (!window.confirm(state.queue.length + " bekleyen stok işlemi kalıcı olarak silinsin mi? Bu işlem sunucu stoğunu değiştirmez.")) return;
+    try {
+      await window.SaveStockOfflineStore.clearQueue();
+      offlineState = window.SaveStockOfflineStore.state();
+      offlineBannerNotice = null;
+      if (offlineMode) await enterOfflineApp(offlineState);
+      else await refreshAll();
+      updateOfflineBanner();
+      showToast("Bekleyen çevrimdışı işlemler silindi.");
+    } catch (error) { showToast(error.message, true); }
+  });
+  document.getElementById("offline-pin-form").addEventListener("submit", async function (event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = Object.fromEntries(new FormData(form).entries());
+    if (values.pin !== values.pin_confirm) {
+      document.getElementById("offline-settings-status").textContent = "Girdiğiniz PIN'ler aynı değil.";
+      return;
+    }
+    try {
+      if (await window.SaveStockOfflineStore.hasVault()) {
+        document.getElementById("offline-settings-status").textContent = "Bu cihazda zaten bir çevrimdışı kasa var.";
+        return;
+      }
+      await refreshAll();
+      await window.SaveStockOfflineStore.setup(values.pin, {user: currentUser, cache: offlineSnapshot()});
+      offlineState = window.SaveStockOfflineStore.state();
+      form.reset();
+      await renderOfflineSettings();
+      showToast("Çevrimdışı erişim bu cihazda şifreli olarak etkinleştirildi.");
+    } catch (error) {
+      document.getElementById("offline-settings-status").textContent = error.message;
+    }
+  });
+  document.getElementById("offline-clear-button").addEventListener("click", async function () {
+    const state = window.SaveStockOfflineStore.state();
+    if (state && state.queue.length && !window.confirm(
+      state.queue.length + " bekleyen işlem de silinecek. Çevrimdışı erişim kapatılsın mı?"
+    )) return;
+    try {
+      await window.SaveStockOfflineStore.clear();
+      offlineState = null;
+      await renderOfflineSettings();
+      updateOfflineBanner();
+      showToast("Bu cihazdaki çevrimdışı veriler silindi.");
+    } catch (error) { showToast(error.message, true); }
+  });
+  window.addEventListener("offline", function () {
+    if (!currentUser) return;
+    offlineMode = true;
+    offlineState = window.SaveStockOfflineStore.isUnlocked() ? window.SaveStockOfflineStore.state() : offlineState;
+    updateOfflineBanner(window.SaveStockOfflineStore.isUnlocked()
+      ? "Bağlantı kesildi. Yeni stok işlemleri PIN ile korunan sıraya alınacak."
+      : "Bağlantı kesildi. Çevrimdışı işlem sırası için Profilim bölümünde PIN ayarlayın.");
+  });
+  window.addEventListener("online", function () {
+    if (!currentUser && !offlineMode) return;
+    if (window.SaveStockOfflineStore.isUnlocked()) {
+      const state = window.SaveStockOfflineStore.state();
+      if (state.queue.length) syncOfflineTransactions();
+      else {
+        offlineMode = false;
+        refreshAll().catch(function (error) { showDataLoadError(error); });
+      }
+    } else {
+      offlineMode = false;
+      refreshAll().catch(function (error) { showDataLoadError(error); });
+    }
   });
   productFilterPanel.open = !productFilterQuery.matches;
   productFilterQuery.addEventListener("change", function (event) { productFilterPanel.open = !event.matches; });
@@ -2778,22 +3366,36 @@ function wireEvents() {
   });
   document.getElementById("inbound-form").addEventListener("submit", async function (event) {
     event.preventDefault(); const form = event.currentTarget;
-    try { await api("/api/stock/inbound", {method: "POST", body: JSON.stringify(formObject(form))}); form.reset(); await refreshAll(); showToast("Stok girişi kaydedildi."); }
+    try {
+      const result = await submitStockOperation("inbound", form);
+      form.reset();
+      if (result.queued) showToast("Stok girişi çevrimdışı sıraya alındı.");
+      else { await refreshAll(); showToast("Stok girişi kaydedildi."); }
+    }
     catch (error) { showToast(error.message, true); }
   });
   document.getElementById("outbound-form").addEventListener("submit", async function (event) {
     event.preventDefault(); const form = event.currentTarget;
     try {
-      const result = await api("/api/stock/outbound", {method: "POST", body: JSON.stringify(formObject(form))}); form.reset(); await refreshAll();
-      showToast("FIFO stok çıkışı tamamlandı · " + result.allocations.map(function (item) { return item.batch_code + ": " + item.quantity; }).join(", "));
+      const submitted = await submitStockOperation("outbound", form);
+      form.reset();
+      if (submitted.queued) showToast("Stok çıkışı çevrimdışı sıraya alındı; sunucu bağlantısında stok yeniden doğrulanacak.");
+      else {
+        await refreshAll();
+        showToast("FIFO stok çıkışı tamamlandı · " + submitted.result.allocations.map(function (item) { return item.batch_code + ": " + item.quantity; }).join(", "));
+      }
     } catch (error) { showToast(error.message, true); }
   });
   document.getElementById("adjustment-form").addEventListener("submit", async function (event) {
     event.preventDefault(); const form = event.currentTarget;
     try {
-      const result = await api("/api/stock/adjustment", {method: "POST", body: JSON.stringify(formObject(form))});
-      form.reset(); await refreshAll();
-      showToast("Lot sayımı kaydedildi · " + result.previous_quantity + " → " + result.quantity_on_hand);
+      const submitted = await submitStockOperation("adjustment", form);
+      form.reset();
+      if (submitted.queued) showToast("Stok düzeltmesi çevrimdışı sıraya alındı; eşitlemede yönetici yetkisi ve mevcut miktar doğrulanacak.");
+      else {
+        await refreshAll();
+        showToast("Lot sayımı kaydedildi · " + submitted.result.previous_quantity + " → " + submitted.result.quantity_on_hand);
+      }
     } catch (error) { showToast(error.message, true); }
   });
   document.getElementById("settings-form").addEventListener("submit", function (event) {

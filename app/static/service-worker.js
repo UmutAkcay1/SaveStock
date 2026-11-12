@@ -1,9 +1,10 @@
-const CACHE_NAME = "savestock-shell-v38";
+const CACHE_NAME = "savestock-shell-v43";
 const APP_SHELL = [
   "/",
   "/static/manifest.webmanifest",
-  "/static/styles.css?v=38",
-  "/static/app.js?v=38",
+  "/static/styles.css?v=43",
+  "/static/offline-store.js?v=43",
+  "/static/app.js?v=43",
   "/static/icons/savestock-192.png",
   "/static/icons/savestock-512.png"
 ];
